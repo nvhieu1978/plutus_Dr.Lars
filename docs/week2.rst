@@ -492,113 +492,101 @@ Như đã đề cập, tập lệnh này sử dụng trình xác thực đơn gi
 Ví dụ 2 - Burn
 ~~~~~~~~~~~~~~~~
 
-Let's look at the second example of validation.
+Hãy xem ví dụ thứ hai về trình xác nhận.
 
-We will start by copying the ``Gift.hs`` code and renaming it ``Burn.hs``.
+Chúng ta sẽ bắt đầu bằng cách sao chép ``Gift.hs``và đổi tên nó ``Burn.hs``.
 
-In the ``Gift`` example we had a validator that would always succeed. In this example, we want to do the opposite - a validator that always fails.
+Trong ví dụ ``Gift``, chúng tôi có một trình xác nhận luôn thành công. Trong ví dụ này, chúng tôi muốn làm ngược lại - một trình xác nhận luôn không thành công.
 
-Recall that a validator indicates failure by throwing an error. So we can modify our validator accordingly.
+Nhớ lại rằng trình xác thực chỉ ra sự thất bại bằng cách ném ra một lỗi. Vì vậy, chúng tôi có thể sửa đổi trình xác thực của mình cho phù hợp.
 
 .. code:: haskell
 
       mkValidator :: Data -> Data -> Data -> ()
       mkValidator _ _ _ = error ()
 
-If we load the module in the REPL and look at *error*
+Nếu chúng tôi tải mô-đun trong REPL và nhìn thấy *error*
 
 .. code:: haskell
 
       Prelude Week02.Burn> :t error
       error :: [Char] -> a
 
-We see the definition for the ``error`` function defined in the standard Haskell ``Prelude``. However, the one in scope in our code is in fact the following ``error`` function.
+Chúng tôi thấy định nghĩa cho chức năng ``error`` được xác định trong Haskell tiêu chuẩn ``Prelude``. Tuy nhiên, một trong phạm vi trong mã của chúng tôi trên thực tế là chức năng ``error``.
 
 .. code:: haskell
 
       Prelude Week02.Burn> :t PlutusTx.Prelude.error
       PlutusTx.Prelude.error :: () -> a
 
-In regular Haskell, you have the ``error`` function which takes an error message string and triggers an error. In Plutus, the ``error`` 
-function does not take a string - it just takes ``()`` and returns an arbitrary type.
+Thông thường trong Haskell, bạn có hàm ``error`` nhận một chuỗi thông báo lỗi và gây ra lỗi. Trong Plutus, hàm ``error``không nhận một chuỗi - nó chỉ nhận khiểu trống ``()`` và trả về một kiểu tùy ý.
 
-And that takes us to an important point.
+Và điều đó đưa chúng ta đến một điểm quan trọng.
 
-We mentioned earlier that we use the ``INLINABLE`` pragma on the ``mkValidator`` function in order to allow it to be used by the Template Haskell code. 
-In Haskell there are many functions available via the ``Prelude`` module, but these will not be usable in Plutus as they are not defined as inlinable. 
-So, the Plutus team have provided an alternative Prelude that can be used in validation.
+Chúng tôi đã đề cập trước đó rằng chúng tôi sử dụng ``INLINABLE`` trên hàm ``mkValidator`` để cho phép nó được sử dụng bởi mã Haskell Prelude. Trong Haskell có nhiều chức năng có sẵn thông qua mô-đun ``Prelude``, nhưng những chức năng này sẽ không thể sử dụng được trong Plutus vì chúng không được định nghĩa là có thể nhập được. Vì vậy, nhóm Plutus đã cung cấp một Đoạn dạo đầu thay thế có thể được sử dụng để xác nhận.
 
-The way that the Plutus Prelude is able to take precedence over the Haskell Prelude, which is normally in scope by default, is by using the following ``LANGUAGE`` pragma in the code.
+Cách mà Plutus Prelude có thể được ưu tiên hơn Haskell Prelude, thường có trong phạm vi theo mặc định, là sử dụng  ``LANGUAGE`` trong mã.
 
 .. code:: haskell
 
       {-# LANGUAGE NoImplicitPrelude   #-}
 
-Then, by importing ``PlutusTx.Prelude``, its functions are used in place of the standard Prelude functions.
+Sau đó, bằng cách nhập PlutusTx.Prelude, các chức năng của nó được sử dụng thay cho các chức năng Prelude tiêu chuẩn.
 
 .. code:: haskell
 
       import PlutusTx.Prelude hiding (Semigroup(..), unless)
 
-You may also notice that the standard Prelude is also imported. However, it is only in order to bring in some functions that have nothing to do with validation but is
-for the off-chain code and the playground.
+Bạn cũng có thể nhận thấy rằng Prelude tiêu chuẩn cũng được nhập khẩu. Tuy nhiên, nó chỉ nhằm mang lại một số chức năng không liên quan gì đến xác thực mà chỉ dành cho mã  off-chain và playground.
 
 .. code:: haskell
 
       import Prelude (IO, Semigroup (..), String)
 
-It can be confusing. A lot of the functions in the Plutus Prelude do have the same signatures and same behaviour as their namesakes in the standard Prelude, but that
-is not always the case, and ``error`` is an example.
+Nó có thể gây nhầm lẫn. Rất nhiều chức năng trong Plutus Prelude có cùng chữ ký và hành vi giống như tên gọi của chúng trong Prelude tiêu chuẩn, nhưng điều đó không phải lúc nào cũng đúng và đây errorlà một ví dụ.
 
-Just remember that when you are using something in a Plutus script that looks like a function from the standard Prelude, what you are actually using is a 
-function from the Plutus Prelude. Often they will have the same signature, but they are not always identical - for example operator precedents may not be the same
+Chỉ cần nhớ rằng khi bạn đang sử dụng một cái gì đó trong tập lệnh Plutus trông giống như một hàm từ Đoạn dạo đầu tiêu chuẩn, thì những gì bạn thực sự đang sử dụng là một hàm từ Đoạn dạo đầu Plutus. Thường thì chúng sẽ có cùng một chữ ký, nhưng chúng không phải lúc nào cũng giống hệt nhau - ví dụ: tiền lệ của toán tử có thể không giống nhau
 
-Looking again at our new validator, we now have a validator that will always fail.
+Nhìn lại trình xác thực mới của chúng tôi, bây giờ chúng ta có một trình xác thực sẽ luôn không thành công.
 
 .. code:: haskell
 
       mkValidator :: Data -> Data -> Data -> ()
       mkValidator _ _ _ = error ()
 
-We will leave everything else as it was and check the effect of this change, using the playground. After clicking ``Compile``, the previous scenario 
-should still be present in the simulator. And after clicking ``Evaluate`` and scrolling down a little, we can see that wallets 1 and 2 have made their gifts but
-wallet 3 has been unable to grab.
+Chúng tôi sẽ để mọi thứ khác như cũ và kiểm tra tác dụng của sự thay đổi này, bằng cách sử dụng sân chơi. Sau khi nhấp ``Compile``, kịch bản trước đó vẫn sẽ xuất hiện trong trình mô phỏng. Và sau khi nhấp ``Evaluate`` và cuộn xuống một chút, chúng ta có thể thấy ví 1 và 2 đã tạo quà tặng nhưng ví 3 không thể lấy được.
 
 .. figure:: img/iteration2/pic__00031.png
 
-If we scroll down further, we will find a log message showing that validation failed.
+Nếu chúng tôi cuộn xuống thêm, chúng tôi sẽ tìm thấy một thông báo nhật ký cho thấy rằng việc xác thực không thành công.
 
 .. code::
 
       , Slot 2: 00000000-0000-4000-8000-000000000002 {Contract instance for wallet 3}:
             Contract instance stopped with error: "WalletError (ValidationError (ScriptFailure (EvaluationError [])))" ]
 
-So, in our first example we had a validator that would always succeed and would allow anyone to grab the UTxOs from it. In the second example,
-we have a validator that always fails and any UTxOs sent to this script address can never be retrieved. This is basically a way to burn funds,
-which may be useful under some circumstances.
+Vì vậy, trong ví dụ đầu tiên của chúng tôi, chúng tôi có một trình xác thực luôn thành công và cho phép bất kỳ ai lấy UTxO từ nó. Trong ví dụ thứ hai, chúng tôi có trình xác thực luôn không thành công và bất kỳ UTxO nào được gửi đến địa chỉ tập lệnh này không bao giờ có thể được truy xuất. Về cơ bản đây là một cách để đốt tiền, có thể hữu ích trong một số trường hợp.
 
-When we look at the logs, we see that validation fails, but we have no clue why it fails. here's a way to change that by using a variant of
-error - ``traceError``.
+Khi nhìn vào nhật ký, chúng tôi thấy rằng quá trình xác nhận không thành công, nhưng chúng tôi không biết tại sao nó không thành công. đây là một cách để thay đổi điều đó bằng cách sử dụng một biến thể của lỗi - ``traceError``.
 
 .. code:: haskell
 
       Prelude Week02.Burn> :t PlutusTx.Prelude.traceError
       PlutusTx.Prelude.traceError :: PlutusTx.Builtins.String -> a      
 
-The function takes a string, but not a Haskell string. It is a Plutus
-string. In order for this to compile, we need to use the ``OverloadedStrings`` GHC extension.
+Hàm nhận một chuỗi, nhưng không phải là một chuỗi Haskell. Nó là một chuỗi Plutus. Để biên dịch cái này, chúng ta cần sử dụng OverloadedStringsphần mở rộng GHC.
 
 .. code:: haskell
 
       {-# LANGUAGE OverloadedStrings   #-}
 
-Then, we can update our validator.
+Sau đó, chúng tôi có thể cập nhật trình xác thực của mình.
 
 .. code:: haskell
 
       mkValidator _ _ _ = traceError "BURNT!"
 
-If we now run the same scenario in the playground with the new code, we will see the custom error message that we added.
+Nếu bây giờ chúng tôi chạy cùng một kịch bản trong sân chơi với mã mới, chúng tôi sẽ thấy thông báo lỗi tùy chỉnh mà chúng tôi đã thêm.
 
 .. code::
 
@@ -607,12 +595,12 @@ If we now run the same scenario in the playground with the new code, we will see
 
 .. figure:: img/iteration2/pic__00032.png
 
-Example 3 - Forty Two
+Ví dụ 3  - Forty Two (42)
 ~~~~~~~~~~~~~~~~~~~~~
 
-For the next example, we will write a validator that does not completely ignore all its arguments. We'll write one that expects a simple redeemer.
+Đối với ví dụ tiếp theo, chúng tôi sẽ viết một trình xác nhận không hoàn toàn bỏ qua tất cả các đối số của nó. Chúng tôi sẽ viết một bài báo mong đợi một người mua lại đơn giản.
 
-Now that we care about the redeemer, we need to be able to reference it. Let's call it ``r``.
+Bây giờ chúng ta quan tâm đến người đổi quà, chúng ta cần có thể tham khảo nó. Hãy gọi nó  ``r``.
 
 .. code:: haskell
 
@@ -620,7 +608,7 @@ Now that we care about the redeemer, we need to be able to reference it. Let's c
       mkValidator :: Data -> Data -> Data -> ()
       mkValidator _ r _
 
-Let's say that we want validation to pass if the redeemer is ``I 42``. 
+Giả sử rằng chúng tôi muốn xác thực được thông qua nếu người đổi  ``I 42``. 
 
 .. code:: haskell
 
@@ -630,8 +618,7 @@ Let's say that we want validation to pass if the redeemer is ``I 42``.
          | r == I 42 = ()
          | otherwise = traceError "wrong redeemer"
 
-If we were to run this now in the playground, validation would always fail. We need to modify the off-chain code to add an input to the ``grab`` endpoint so that 
-wallet 3 can pass in an ``Integer`` which we can then pass to the validator as the redeemer.
+Nếu chúng ta chạy điều này ngay bây giờ trong sân chơi, việc xác nhận sẽ luôn không thành công. Chúng tôi cần sửa đổi mã off-chain để thêm đầu vào cho Endpoint ``grab``  để ví 3 có thể chuyển vào một điểm ``Integer`` mà sau đó chúng tôi có thể chuyển cho trình xác thực với tư cách là redeemer.
 
 .. code:: haskell
 
@@ -639,121 +626,108 @@ wallet 3 can pass in an ``Integer`` which we can then pass to the validator as t
                 Endpoint "give" Integer
             .\/ Endpoint "grab" Integer
 
-We add the redeemer argument to the ``grab`` declaration. Note the addition of the ``Integer`` in the function signature, as well as the new
-``n`` parameter which is used to reference it.
+Chung tôi thêm đối số redeemer vào khai báo ``grab``. Lưu ý rằng việc thêm số ``Integer`` trong chức năng ký, cũng như tham số ``n`` cái mà làm tham chiếu.
 
 .. code:: haskell
 
       grab :: forall w s e. AsContractError e => Integer -> Contract w s e ()
       grab n = do
 
-We can then pass it to the ``mustSpendScriptOutput`` function instead of the throw-away value we used earlier.
+Sau đó, chúng ta có thể chuyển nó vào hàm ``mustSpendScriptOutput`` thay vì giá trị vứt bỏ mà chúng ta đã sử dụng trước đó.
 
 .. code:: haskell
 
       tx = mconcat [mustSpendScriptOutput oref $ Redeemer $ I n | oref <- orefs]
 
-One more change, we need to change the ``>>`` to ``>>=`` in the following code, now that ``grab`` has an argument. You can use the REPL to look at
-the types ``>>`` and ``>>=`` to see why the second one is now needed. Basically, they both sequence actions, but ``>>`` ignores any wrapped values, 
-whereas ``>>=`` accesses the wrapped value and passes it to the next action.
+Một thay đổi nữa, chúng ta cần thay đổi ``>>`` thành ``>>=`` trong đoạn mã sau, và bây giờ ``grab`` có một đối số. Bạn có thể sử dụng REPL để thấy ``>>`` và ``>>=`` và bây giờ tại sao dừng cái thứ hai. Về cơ bản, cả hai đều trình tự các hành động, nhưng ``>>`` không lấy giá trị đầu múp,con ``>>=`` truy cập giá trị được bao bọc và chuyển nó cho hành động tiếp theo.
 
 .. code:: haskell
 
       grab' = endpoint @"grab" >>= grab
 
-Now we can try it out in the playground. After adding the new code and clicking ``Simulate`` you will notice that the old scenario has gone. That
-is because the endpoints have changed and the old scenario is no longer valid.
+Bây giờ chúng ta có thể thử nó trong sân chơi. Sau khi thêm mã mới và nhấp vào ``Simulate`` bạn sẽ nhận thấy rằng kịch bản cũ đã biến mất. Đó là bởi vì các điểm cuối (Endpoint) đã thay đổi và kịch bản cũ không còn hợp lệ.
 
-Let's set up a scenario that uses just two wallets. Wallet one is going to give 3 Ada oo the contract, and wallet 2 is going to try to grab them, but 
-this time, wallet 2 will need to pass in a value which will be used to construct the redeemer.
+Hãy thiết lập một kịch bản chỉ sử dụng hai ví. Ví một sẽ cung cấp cho 3 Ada oo hợp đồng và ví 2 sẽ cố gắng lấy chúng, nhưng lần này, ví 2 sẽ cần chuyển vào một giá trị sẽ được sử dụng để tạo người đổi.
 
-For our first attempt, we will add the wrong redeemer value, in this case 100.
+Đối với lần thử đầu tiên, chúng tôi sẽ thêm giá trị người đổi sai, trong trường hợp này là 100.
 
 .. figure:: img/iteration2/pic__00033.png
 
-If we click ``Evaluate``, we see that we only have two transactions, and we see that the Ada remains in the script, which shows that wallet 2 failed to grab it.
+Nếu chúng tôi nhấp vào ``Evaluate``, chúng ta thấy rằng chúng ta chỉ có hai giao dịch và chúng ta thấy rằng Ada vẫn còn trong tập lệnh, điều này cho thấy rằng ví 2 không lấy được nó.
 
 .. figure:: img/iteration2/pic__00034.png
 
-The final balances also show this.
+Các số dư cuối cùng cũng cho thấy điều này.
 
 .. figure:: img/iteration2/pic__00035.png
 
-And, if we look at the trace, we find the error.
+Và, nếu chúng ta nhìn vào dấu vết, chúng ta sẽ tìm ra lỗi.
 
 .. code::
 
       , Slot 2: 00000000-0000-4000-8000-000000000001 {Contract instance for wallet 2}:
             Contract instance stopped with error: "WalletError (ValidationError (ScriptFailure (EvaluationError [\"wrong redeemer\"])))" ]
 
-If we go back to scenario, change the value to ``42`` and click ``Evaluate`` again, we should see that validation succeeds.
+Nếu chúng ta quay lại kịch bản, thay đổi giá trị thành ``42`` và nhấp ``Evaluate`` lại, chúng ta sẽ thấy rằng xác thực thành công.
 
 .. figure:: img/iteration2/pic__00036.png
 
-Now we see the third transaction where wallet 2 manages to collect the funds, minus fees.
+Bây giờ chúng ta thấy giao dịch thứ ba trong đó ví 2 quản lý để thu tiền, trừ đi phí.
 
 .. figure:: img/iteration2/pic__00037.png
 
-We see that the final balances are as we expect, and also the logs show that validation did not throw an error, which means that validation succeeded.
+Chúng tôi thấy rằng số dư cuối cùng là như chúng tôi mong đợi và các bản ghi cũng cho thấy rằng việc xác thực không gây ra lỗi, điều đó có nghĩa là quá trình xác thực đã thành công.
 
-So that's the first example of a validator that looks at at least one of its arguments.
+Vì vậy, đó là ví dụ đầu tiên về trình xác thực xem xét ít nhất một trong các đối số của nó.
 
-Example 4 - Typed
+Ví dụ 4 - Typed
 ~~~~~~~~~~~~~~~~~
 
-It was mentioned at the beginning of the lecture, this is low-level Plutus and in reality, no-one will write validation functions like this.
+Nó đã được đề cập ở phần đầu của bài giảng, đây là Plutus cấp thấp và trên thực tế, không ai sẽ viết các hàm xác nhận như thế này.
 
-Now we will see how it is actually done using a typed version.
+Bây giờ chúng ta sẽ xem nó thực sự được thực hiện như thế nào bằng cách sử dụng một phiên bản đã đánh máy.
 
-Even though the ``Data`` type is powerful and you can encode all sorts of data into it, it doesn't really feel like Haskell. It is almost like you 
-are writing in an untyped language like Javascript or Python. It is just a like a blob of data, it can contain anything so you don't really have
-any type safety. You will always need to check, for example, if you are expecting an integer that you are indeed given an integer.
+Mặc dù kiểu ``Data``này mạnh mẽ và bạn có thể mã hóa tất cả các loại dữ liệu vào nó, nhưng nó không thực sự giống Haskell. Nó gần giống như bạn đang viết bằng một ngôn ngữ không định kiểu như Javascript hoặc Python. Nó giống như một khối dữ liệu, nó có thể chứa bất cứ thứ gì nên bạn không thực sự có bất kỳ loại an toàn nào. Bạn sẽ luôn cần kiểm tra, ví dụ, nếu bạn đang mong đợi một số nguyên mà bạn thực sự được cung cấp một số nguyên.
 
-It is especially bad with the third argument, the context. Even though it's easy to imagine that you can somehow encode a transaction with its inputs and outputs into
-the ``Data`` type, it is not at all clear how that is done.
+Nó đặc biệt tệ với đối số thứ ba, bối cảnh. Mặc dù thật dễ dàng để tưởng tượng rằng bằng cách nào đó bạn có thể mã hóa một giao dịch với các đầu vào và đầu ra của nó thành kiểu ``Data``, nhưng hoàn toàn không rõ ràng điều đó được thực hiện như thế nào.
 
-We would rather use more specific data types that are tailored to the business logic.
+Chúng tôi muốn sử dụng các kiểu dữ liệu cụ thể hơn được điều chỉnh cho phù hợp với logic nghiệp vụ.
 
-This is indeed possible with so-called Typed Validators. What this means is that we can replace the occurrences of ``Data`` in the ``mkValidator`` signature 
-with more suitable types.
+Điều này thực sự có thể thực hiện được với cái gọi là Typed Validators. Điều này có nghĩa là chúng ta có thể thay thế các lần xuất hiện ``Data`` trong ``mkValidator`` chữ ký bằng các kiểu phù hợp hơn.
 
 .. code:: haskell
 
       mkValidator :: Data -> Data -> Data -> ()
 
-In our silly little example, we completely ignore the Datum, so a more
-suitable type would be just the Unit type - ().
+Trong ví dụ nhỏ ngớ ngẩn của chúng tôi, chúng tôi hoàn toàn bỏ qua Datum, vì vậy một loại phù hợp hơn sẽ chỉ là loại Unit - ().
 
 .. code:: haskell
 
       mkValidator :: () -> Data -> Data -> ()
 
-For the redeemer, in this example, we are only dealing with integers, so
-it would probably make more sense to use Integer instead.
+Đối với redeemer, trong ví dụ này, chúng tôi chỉ xử lý các số nguyên, vì vậy có lẽ sẽ hợp lý hơn khi sử dụng Số nguyên thay thế..
 
 .. code:: haskell
 
       mkValidator :: () -> Integer -> Data -> ()
 
-For the context, there is a much nicer type called ``ScriptContext`` that's made exactly for this purpose.
+Đối với context, có một kiểu hay hơn nhiều được gọi là ``ScriptContext`` được tạo ra chính xác cho mục đích này. 
 
 .. code:: haskell
 
       mkValidator :: () -> Integer -> ScriptContext -> ()
 
-Finally, we have already mentioned that it is a bit unusual to use ``()`` as a return type. Much more natural would be to use ``Bool`` to indicate
-successful or failed validation.
+Cuối cùng, chúng tôi đã đề cập rằng hơi bất thường khi sử dụng ``()`` làm kiểu trả về. Tự nhiên hơn nhiều sẽ được sử dụng ``Bool`` để chỉ ra xác thực thành công hay thất bại.
 
 .. code:: haskell
 
       mkValidator :: () -> Integer -> ScriptContext -> Bool
 
-So, this is a better way to write validation code. The last two types ``SciprtContext`` and ``Bool``, but the first two types can be different depending on the situation.
+Vì vậy, đây là một cách tốt hơn để viết mã xác nhận. Hai loại cuối cùng ``SciprtContext`` và ``Bool``, nhưng hai loại đầu tiên có thể khác nhau tùy thuộc vào tình huống.
 
-In this case, let's now rewrite the function accordingly using these new types. The parameter ``r`` is now no longer of type ``Data`` - it is an ``Integer``, so 
-we can simply check that it is equal to 42 rather than checking it against a constructed ``Data`` type.
+Trong trường hợp này, bây giờ chúng ta hãy viết lại hàm cho phù hợp bằng cách sử dụng các kiểu mới này. Tham số r bây giờ không còn là kiểu  ``Data`` nữa- nó là một  kiểu ``Integer``, vì vậy chúng ta có thể chỉ cần kiểm tra xem nó bằng 42 thay vì kiểm tra nó với một kiểu ``Data`` đã xây dựng .
 
-And, as we are now returning a ``Bool``, we can we just make the function a boolean expression.
+Và, khi chúng ta trả về a Bool, chúng ta có thể biến hàm thành một biểu thức boolean.
 
 .. code:: haskell
 
@@ -761,16 +735,14 @@ And, as we are now returning a ``Bool``, we can we just make the function a bool
       mkValidator :: () -> Integer -> ScriptContext -> Bool
       mkValidator _ r _ = r == 42
 
-This will have the same problem that we had before in that, in the case of an error, we won't get a nice error message. There is a nice Plutus function
-called ``traceIfFalse`` which takes a ``String`` and a ``Bool`` and returns a ``Bool``. If the first ``Bool`` is ``True``, the result will be ``True`` and the ``String`` is
-ignored. However, if the first ``Bool`` is ``False``, then the result will be ``False`` and the ``String`` will be logged.
+Điều này sẽ có cùng một vấn đề mà chúng tôi đã gặp trước đó, trong trường hợp có lỗi, chúng tôi sẽ không nhận được thông báo lỗi đẹp. Có một hàm Plutus hay được gọi là hàm ``traceIfFalse`` nó nhẫn ``String`` và ``Bool`` sau đó trả về  ``Bool``. Nếu đầu tiên ``Bool`` là ``True``, thì kết quả sẽ là ``True`` và  ``String`` sẽ bỏ qua. Tuy nhiên nếu đầu tiên ``Bool`` là ``False``, thì kết quả là ``False`` và ``String`` được ghi lại.
 
 .. code:: haskell
 
       PlutusTx.Prelude.traceIfFalse
             :: PlutusTx.Builtins.String -> Bool -> Bool
 
-This is exactly what we need.
+Đây chính xác là những gì chúng ta cần.
 
 .. code:: haskell
 
@@ -778,12 +750,11 @@ This is exactly what we need.
       mkValidator :: () -> Integer -> ScriptContext -> Bool
       mkValidator _ r _ = traceIfFalse "wrong redeemer" $ r == 42
 
-This will not yet compile as other parts of the code are not yet type correct. We need to adapt our boilerplate.
+Điều này sẽ chưa được biên dịch vì các phần khác của mã chưa được nhập chính xác. Chúng tôi cần phải điều chỉnh bảng nấu của chúng tôi.
 
-First, we introduce a new dummy data type, which here we call ``Typed``, simply based on the name of the script. For this type we must provide an instance
-of ``Scripts.ValidatorTypes``.
+Đầu tiên, chúng tôi giới thiệu một kiểu dữ liệu giả mới, ở đây chúng tôi gọi là ``Typed``, đơn giản dựa trên tên của tập lệnh. Đối với loại này, chúng tôi phải cung cấp một phiên bản của ``Scripts.ValidatorTypes``.
 
-The purpose of this instance is to declare the types for the datum and the redeemer.
+Mục đích của trường hợp này là khai báo các loại cho datum và redeemer.
 
 .. code:: haskell
 
@@ -792,11 +763,9 @@ The purpose of this instance is to declare the types for the datum and the redee
           type instance DatumType Typed = ()
           type instance RedeemerType Typed = Integer
 
-This is quite advanced Haskell, so-called type-level programming, but just like the Template Haskell we have already encountered, you don't 
-really need a deep understanding of it as all scripts will follow the same pattern.
-                    
-Now we need to compile the validator. Where previously we used ``mkValidatorScript``, now we use something called ``mkTypedValidator``, which takes our
-new data type as parameter and produces something of type ``TypedValidator``.
+Đây là Haskell khá nâng cao, được gọi là lập trình mức kiểu, nhưng cũng giống như Template Haskell mà chúng ta đã gặp, bạn không thực sự cần hiểu sâu về nó vì tất cả các script sẽ tuân theo cùng một khuôn mẫu.
+
+Bây giờ chúng ta cần biên dịch trình xác nhận. Nơi trước đây chúng ta đã sử dụng ``mkValidatorScript``,, bây giờ chúng ta sử dụng một cái gì đó được gọi là ``mkTypedValidator``, lấy kiểu dữ liệu mới của chúng ta làm tham số và tạo ra một cái gì đó có kiểu ``TypedValidator``.
 
 .. code:: haskell
 
@@ -807,71 +776,69 @@ new data type as parameter and produces something of type ``TypedValidator``.
         where
           wrap = Scripts.wrapValidator @() @Integer
           
-This is similar to the ``mkValidator`` code, but this type we also compile a ``wrapValidator`` function that takes the datum and redeemer types.
+Điều này tương tự với mã ``mkValidator``, nhưng loại này chúng tôi cũng biên dịch một hàm ``wrapValidator`` nhận kiểu dữ liệu và redeemer.
 
-In order for this to work we first need one more import.
+Để điều này hoạt động, trước tiên, chúng ta cần thêm một import.
 
 .. code:: haskell
 
       import qualified Ledger.Typed.Scripts as Scripts
 
-In this example, it is being imported qualified and using the ``Scripts`` prefix, but this is arbitrary and you could pick some other way of referencing the module.
+Trong ví dụ này, nó đang được nhập đủ điều kiện và sử dụng tiền tố ``Scripts`` , nhưng điều này là tùy ý và bạn có thể chọn một số cách khác để tham chiếu đến mô-đun.
 
-We these changes, the Haskell code will compile, and we now need to change the Template Haskell boilerplate that creates the ``validator`` function.
+Chúng tôi thực hiện những thay đổi này, mã Haskell sẽ được biên dịch và bây giờ chúng tôi cần thay đổi bản soạn thảo Haskell Mẫu tạo ra hàm ``validator``.
 
 .. code:: haskell
 
       validator :: Validator
       validator = Scripts.validatorScript typedValidator
 
-Here we have used the ``validatorScript`` function to create an untyped validator from our typed version.
+Ở đây chúng tôi đã sử dụng hàm ``validatorScript`` để tạo trình xác thực không định kiểu từ phiên bản đã nhập của chúng tôi.
 
-To get the hash we could, of course, use the validator we now have and turn it into a ``ValidatorHash`` as we did before, but there is a more direct way, which looks
-identical, but in this case ``Scripts`` is coming from the module ``Ledger.Typed.Scripts`` rather than ``Ledger.Scripts``. This version takes the typed validator directly.
+Tất nhiên, để có được hàm băm, chúng ta có thể sử dụng trình xác thực mà chúng ta có và biến nó thành một trình xác thực như ``ValidatorHash`` chúng ta đã làm trước đây, nhưng có một cách trực tiếp hơn, trông giống hệt nhau, nhưng trong trường hợp ``Scripts ``này là đến từ mô-đun ``Ledger.Typed.Scripts`` hơn là ``Ledger.Scripts``. Phiên bản này lấy trực tiếp trình xác thực đã nhập.
 
 .. code:: haskell
 
       valHash :: Ledger.ValidatorHash
       valHash = Scripts.validatorHash typedValidator
 
-The script address is calculated as before.
+Địa chỉ tập lệnh được tính như trước đây.
 
 .. code:: haskell
 
       scrAddress :: Ledger.Address
       scrAddress = scriptAddress validator
 
-In this extremely simply example, it probably doesn't seem worth the effort, but for realistic contracts, it is much nicer to do it like this.
+Trong ví dụ cực kỳ đơn giản này, nó có vẻ không đáng để nỗ lực, nhưng đối với các hợp đồng thực tế, làm như thế này sẽ tốt hơn nhiều.
 
-The off-chain code is almost identical.
+Mã off-chain gần như giống hệt nhau.
 
-There is a small change change to the ``give`` endpoint. Although we have not yet gone over this part of the code in detail, the following changes can be made.
+Có một thay đổi nhỏ đối với giveđiểm cuối. Mặc dù chúng tôi vẫn chưa xem xét chi tiết phần này của mã, nhưng có thể thực hiện các thay đổi sau.
 
 .. code:: haskell
 
       let tx = mustPayToTheScript () $ Ada.lovelaceValueOf amount
       ledgerTx <- submitTxConstraints inst tx
 
-The ``mustPayToOtherScript`` function has been replaced with ``mustPayToTheScript``. This is a convenience script which allows us to pass 
-in just () as we longer need to construct a value of type ``Data``. We also no longer need to pass in the script hash.
+Hàm ``mustPayToOtherScript`` đã được thay thế bằng ``mustPayToTheScript``. Đây là một script tiện lợi cho phép chúng ta truyền chỉ vào () vì chúng ta còn cần phải xây dựng một giá trị của kiểu Data. Chúng ta cũng không cần chuyển mã băm tập lệnh nữa.
 
-The behaviour of this code will be identical to the behaviour in the previous example, so we won't go over it in the playground.
+Hành vi của mã này sẽ giống với hành vi trong ví dụ trước, vì vậy chúng tôi sẽ không xem qua nó trong sân chơi.
 
-Now we will explain how that actually works. How does Plutus convert these custom data types to the actual low-level implementation - the ``Data`` type.
+Bây giờ chúng tôi sẽ giải thích cách hoạt động thực sự của nó. Làm cách nào để Plutus chuyển đổi các kiểu dữ liệu tùy chỉnh này thành kiểu triển khai cấp thấp thực tế - Datakiểu.
 
-We can look at the code in the ``PlutusTx.IsData.Class`` module.
+Chúng ta có thể xem mã trong mô-đun PlutusTx.IsData.Class .
 
-Here we see that there is a quite simple type class defined called ``IsData``.
+Ở đây chúng ta thấy rằng có một lớp kiểu khá đơn giản được định nghĩa được gọi là ``IsData``.
 
 .. figure:: img/iteration2/pic__00037.png
 
-This class provides two functions
+Lớp này cung cấp hai chức năng
 
--  ``toData`` takes a value and converts it to ``Data``
--  ``fromData`` takes a value of type ``Data`` and attempts to convert it to an instance of type ``IsData``. This can fail because not all values of
-   type ``Data`` will be convertible to the target type.
 
-Let's try this out in the REPL.
+-  ``toData``  nhận một giá trị và chuyển đổi nó thành  ``Data``
+-  ``fromData`` nhận một giá trị của kiểu ``Data`` cố gắng chuyển đổi nó thành một thể hiện của kiểu ``IsData``.  Điều này có thể không thành công vì không phải tất cả các giá trị của kiểu  ``Data`` sẽ được chuyển đổi thành kiểu đích..
+
+Hãy thử điều này trong REPL.
 
 .. code:: haskell
 
@@ -879,35 +846,35 @@ Let's try this out in the REPL.
       Prelude PlutusTx Week02.Typed> import PlutusTx.IsData.Class
       Prelude PlutusTx PlutusTx.IsData.Class Week02.Typed> :i IsData
 
-We know that ``()`` and ``Integer`` are both instances of ``IsData`` because they worked in our example.
+Chúng tôi biết điều đó  ``()`` and ``Integer`` cả hai đều là trường hợp của ``IsData`` vì chúng đã hoạt động trong ví dụ của chúng tôi.
 
-Let's convert an ``Integer`` to ``Data``
+Hãy chuyển đổi ``Integer`` thành ``Data``
 
 .. code:: haskell
 
       Prelude PlutusTx PlutusTx.IsData.Class Week02.Typed> toData (42 :: Integer)
       I 42
       
-We see that this has been converted to an instance of type ``Data`` using the ``I`` constructor, which we did manually before we used typed
-validation.
+Chúng tôi thấy rằng điều này đã được chuyển đổi thành một phiên bản của kiểu Data bằng cách sử dụng hàm tạo I , mà chúng tôi đã thực hiện theo cách thủ công trước khi chúng tôi sử dụng xác thực.
 
-Now let's do it the other way around
+Bây giờ hãy làm theo cách khác
+
 
 .. code:: haskell
 
       Prelude PlutusTx PlutusTx.IsData.Class Week02.Typed> fromData (I 42) :: Maybe Integer
       Just 42
 
-We get a ``Just 42`` back - ``Just`` being the ``Maybe`` constructor when ``Maybe`` is not ``Nothing``.
+Chúng tôi nhận được một ``Just 42`` back - ``Just`` là ``Maybe`` tạo khi ``Maybe`` là ``Nothing``.
 
-And when it fails, when it can't convert to the target type, we will get back ``Nothing``.
+Và khi nó không thành công, khi nó không thể chuyển đổi sang loại đích, chúng ta sẽ lấy lại ``Nothing``.
 
 .. code:: haskell
 
       Prelude PlutusTx PlutusTx.IsData.Class Week02.Typed> fromData (List []) :: Maybe Integer
       Nothing
 
-If we examine ``IsData`` we can see all the types that this pattern will work for all the types that have an ``IsData`` instance defined.
+Nếu chúng ta kiểm tra``IsData``. Chúng ta có thể thấy tất cả các kiểu mà mẫu này sẽ hoạt động cho tất cả các kiểu là ``IsData`` được xác định.
 
 .. code:: haskell
 
@@ -940,16 +907,14 @@ If we examine ``IsData`` we can see all the types that this pattern will work fo
         -- Defined in ‘PlutusTx.IsData.Class’
       instance IsData Data -- Defined in ‘PlutusTx.IsData.Class’
       
-This is still quite a short list of possible types. We would like to use many more types than this for our datum and redeemer.
+Đây vẫn là một danh sách khá ngắn về các loại có thể. Chúng tôi muốn sử dụng nhiều loại hơn thế này cho dữ liệu và công cụ đổi quà của chúng tôi.
 
-In order to do this, we would normally need to define an ``IsData`` instance for any type that we wish to use. This will allow us to tell the 
-compiler how to do the back and forth conversions. However, this again would be tedious as it is such a mechanical process. So, there 
-is a mechanism in Plutus that does this for us.
+Để làm được điều này, thông thường chúng ta cần xác định một IsDatathể hiện cho bất kỳ kiểu nào mà chúng ta muốn sử dụng. Điều này sẽ cho phép chúng tôi cho trình biên dịch biết cách thực hiện chuyển đổi qua lại. Tuy nhiên, điều này một lần nữa sẽ rất tẻ nhạt vì nó là một quá trình máy móc. Vì vậy, có một cơ chế trong Plutus thực hiện điều này cho chúng ta.
 
-Example 5 - Custom IsData types
+Ví dụ  5 - Các kiểu IsData tùy chỉnh
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Now let's talk about custom data types. Let's define a silly one and use it in our validator function.
+Bây giờ chúng ta hãy nói về các kiểu dữ liệu tùy chỉnh. Hãy xác định một cái ngớ ngẩn và sử dụng nó trong hàm xác nhận của chúng tôi.
 
 .. code:: haskell
 
@@ -963,11 +928,9 @@ Now let's talk about custom data types. Let's define a silly one and use it in o
 
 .. note::
 
-      There is also a stable version of the ``PlutusTx.unstableMakeIsData`` function, and the stable version should always be used in production code. The difference between the two is 
-      that, in the case where more than one ``Data`` constructor is required, the unstable version makes no guarantee, between Plutus versions, that the 
-      order of constructors will be preserved.
+      Ngoài ra còn có một phiên bản ổn định của hàm PlutusTx.unstableMakeIsData  và phiên bản ổn định phải luôn được sử dụng trong mã sản xuất. Sự khác biệt giữa cả hai là, trong trường hợp yêu cầu Data nhiều hơn một hàm tạo, phiên bản không ổn định sẽ không đảm bảo, giữa các phiên bản Plutus, thứ tự của các hàm tạo sẽ được giữ nguyên.
 
-And we need to change some of the boilerplate.
+Và chúng ta cần thay đổi một số tấm boilerplate.
 
 .. code:: haskell
 
@@ -999,20 +962,19 @@ Instead of using ``I r``, we will use ``toData (MySillyRedeemer r)``.
           void $ awaitTxConfirmed $ txId ledgerTx
           logInfo @String $ "collected gifts"
 
-If we try to compile the code now, either on the command line or in the playground, we will get an error because Plutus doesn't know how to
-convert back and forth between ``IsData`` and ``MySillyRedeemer``.
+Nếu chúng ta cố gắng biên dịch mã ngay bây giờ, trên dòng lệnh hoặc trong sân chơi, chúng ta sẽ gặp lỗi vì Plutus không biết cách chuyển đổi qua lại giữa ``IsData`` and ``MySillyRedeemer``.
 
-We could write an instance of ``IsData`` for ``MySillyRedeemer`` by hand. But, we don't need to.
+Chúng tôi có thể viết một ví dụ của IsData cho MySillyRedeemer bằng tay. Nhưng, chúng ta không cần phải làm vậy.
 
-Instead we can use another bit of Template Haskell magic.
+Thay vào đó, chúng ta có thể sử dụng một chút phép thuật của Template Haskell.
 
 .. code:: haskell
 
       PlutusTx.unstableMakeIsData ''MySillyRedeemer
 
-At compile time, the compiler will use the Template Haskell to write an ``IsData`` instance for us. And now, it will compile.
+Tại thời điểm biên dịch, trình biên dịch sẽ sử dụng Template Haskell để viết một IsDatathể hiện cho chúng ta. Và bây giờ, nó sẽ biên dịch.
 
-Let's check it in the REPL.
+Hãy kiểm tra nó trong REPL.
 
 .. code:: haskell
 
@@ -1021,19 +983,17 @@ Let's check it in the REPL.
       Prelude PlutusTx PlutusTx.IsData.Class Week02.IsData> toData (MySillyRedeemer 42)
       Constr 0 [I 42]
 
-If you try this code, which is in ``IsData.hs``, in the playground, you should see that it behaves in the same way as before.
+Nếu bạn thử mã này IsData.hs, trong sân chơi, bạn sẽ thấy rằng nó hoạt động theo cách giống như trước đây.
 
-Summary
+Tóm lược
 -------
 
-We have seen a couple of examples of simple validators.
+Chúng tôi đã thấy một vài ví dụ về trình xác nhận đơn giản.
 
-We started with a validator that will always succeed, completely ignoring its arguments. Then we looked at a validator that always fails, again completely ignoring
-its arguments. Then we looked at one that examines its redeemer to check for a certain predefined value. 
+Chúng tôi đã bắt đầu với một trình xác thực sẽ luôn thành công, hoàn toàn bỏ qua các lập luận của nó. Sau đó, chúng tôi xem xét một trình xác thực luôn không thành công, một lần nữa hoàn toàn bỏ qua các đối số của nó. Sau đó, chúng tôi xem xét một công cụ kiểm tra người mua lại của nó để kiểm tra một giá trị được xác định trước nhất định.
 
-We then turned this validator into a typed version which is the one which would be used in practice. First we used built-in data types and then we saw how we can use
-custom data types.
+Sau đó, chúng tôi đã biến trình xác thực này thành một phiên bản đã nhập, phiên bản này sẽ được sử dụng trong thực tế. Đầu tiên, chúng tôi sử dụng các kiểu dữ liệu tích hợp và sau đó chúng tôi xem cách chúng tôi có thể sử dụng các kiểu dữ liệu tùy chỉnh.
 
-We have not yet looked at examples where the datum or the context are inspected, which would be required for more realistic examples.
+Chúng tôi vẫn chưa xem xét các ví dụ trong đó dữ liệu hoặc bối cảnh được kiểm tra, điều này sẽ được yêu cầu để có các ví dụ thực tế hơn.
 
-We will look at that in the next lecture.
+Chúng ta sẽ xem xét điều đó trong bài giảng tiếp theo.
