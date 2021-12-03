@@ -2,102 +2,72 @@ Week 02 - Validation
 ====================
 
 .. note::
-      This is a written version of `Lecture
-      #2, Iteration #2 <https://www.youtube.com/watch?v=sN3BIa3GAOc>`__.
+      Đây là tài liệu  `Bài giảng #2, Dr. Lars <https://youtu.be/7nDGZkUIeUQ>`__.
 
-      It covers low-level, untyped on-chain validation scripts and high-level,
-      typed on-chain validation scripts.
+     Nó bao gồm mức thấp và mức cao tập lệnh xác thực on-chain.
 
-      The code in this lecture uses the Plutus commit 81ba78edb1d634a13371397d8c8b19829345ce0d      
+      Mã trong bài giảng này sử dụng cam kết Plutus 81ba78edb1d634a13371397d8c8b19829345ce0d      
 
-Before We Start
+Trước khi bắt đầu
 ---------------
 
-Let's talk about an important point that was brought up by one of the pioneers following lecture #1.
+Hãy nói về một điểm quan trọng được đưa ra bởi một trong những người tiên phong sau bài giảng số 1.
 
-You will recall in the auction example, we created three endpoints - ``start``, ``bid`` and ``close``. For ``close`` there were two scenarios. If there was a 
-high-enough bid, the token goes to the highest bidder. If there was not a high-enough bid, the token goes back to the seller.
+Bạn sẽ gọi lại trong ví dụ đấu giá, chúng tôi tạo ra ba endpoints - ``start``, ``bid`` và ``close``. ``close`` có hai kịch bản. Nếu có giá thầu đủ cao, mã thông báo sẽ được chuyển đến người đặt giá thầu cao nhất. Nếu không có giá thầu đủ cao, mã thông báo sẽ quay trở lại người bán.
 
-What would happen if the ``close`` endpoint wasn't there? Could the money be locked forever in the contract?
+Điều gì sẽ xảy ra nếu ``endpoint close``  không có ở đó? Tiền có thể bị khóa mãi mãi trong hợp đồng không?
 
-This is a really important point, because what you have to realise is that that UTxOs on the blockchain are just data, they are absolutely passive. In order 
-for anything to happen there must be a transaction. In order to make progress and to change the state of the blockchain, there must be a new transaction submitted
-that consumes various UTxOs and produces new UTxOs.
+Đây là một điểm thực sự quan trọng, bởi vì những gì bạn phải nhận ra là UTxO trên blockchain chỉ là dữ liệu, chúng hoàn toàn thụ động. Để bất cứ điều gì xảy ra phải có một giao dịch. Để đạt được tiến bộ và thay đổi trạng thái của blockchain, phải có một giao dịch mới được gửi sử dụng các UTxO khác nhau và tạo ra các UTxO mới.
 
-Only new transactions change the state. A UTxO will never spring into action by itself and do something. You can't have a smart contract that sits on the blockchain and
-the, at some point, suddenly performs an action.
+Chỉ có các giao dịch mới thay đổi trạng thái. UTxO sẽ không bao giờ tự hoạt động và thực hiện điều gì đó. Bạn không thể có một hợp đồng thông minh nằm trên blockchain và vào một thời điểm nào đó, đột nhiên thực hiện một hành động.
 
-So, we really need the ``close`` endpoint if we want the auction to be settled. In our case, the endpoint was manually triggered. You could write a contract that
-runs in the wallet that would automatically generate the ``close`` transaction - it is possible to write quite sophisticated off-chain code.
+Vì vậy, chúng tôi thực sự cần ``endpoint close`` nếu chúng tôi muốn cuộc đấu giá được giải quyết. Trong trường hợp của chúng tôi, điểm cuối được kích hoạt theo cách thủ công. Bạn có thể viết một hợp đồng chạy trong ví sẽ tự động tạo closegiao dịch - có thể viết mã ngoài chuỗi khá phức tạp.
 
-However, from the point-of-view of the blockchain, it is always an external trigger that does something. Nothing happens if it is not externally triggered.
+Tuy nhiên, theo quan điểm của blockchain, nó luôn là một yếu tố kích hoạt bên ngoài thực hiện điều gì đó. Không có gì xảy ra nếu nó không được kích hoạt từ bên ngoài.
 
-So, if there were no ``close`` endpoint, or the ``close`` endpoint never got triggered, the funds would remain sitting at the script address forever.
+Vì vậy, nếu không có ``endpoint close`` , hoặc ``endpoint close``  không bao giờ được kích hoạt, thì tiền sẽ vẫn nằm ở địa chỉ tập lệnh mãi mãi.
 
-Introduction
+Giới thiệu
 ------------
 
-We saw in the first lecture that there are two sides to a smart contract
-- an on-chain part and an off-chain part.
+Trong bài giảng đầu tiên, chúng ta đã thấy rằng hợp đồng thông minh có hai mặt - một phần trong chuỗi và một phần ngoài chuỗi.
 
-The on-chain part is about validation. It allows nodes to validate a
-given transaction and whether it is allowed to consume a given UTxO.
+Phần on-chain là về xác nhận. Nó cho phép các nút xác thực một giao dịch nhất định và liệu nó có được phép sử dụng một UTxO nhất định hay không.
 
-The off-chain part lives in the user's wallet. It constructs and submits
-suitable transactions.
+Phần off-chain nằm trong ví của người dùng. Nó xây dựng và gửi các giao dịch phù hợp.
 
-Both are important topics. We have to master both in order to write
-smart contracts, but for now we will concentrate on the on-chain part.
+Cả hai đều là chủ đề quan trọng. Chúng tôi phải thành thạo cả hai để viết hợp đồng thông minh, nhưng hiện tại chúng tôi sẽ tập trung vào phần on-chain.
 
-Let's recall the Extended UTxO model where the idea is that we introduce
-a new type of address.
+Hãy nhớ lại mô hình UTxO mở rộng mà ý tưởng là chúng tôi giới thiệu một loại địa chỉ mới.
 
 .. figure:: img/1.png
 
-In the simple UTxO model are so-called public key addresses, where the
-address is given by the hash of the public key. If a UTxO sits at such a
-public key address, then a transaction can consume that UTxO as an input
-if the signature belonging to that public key is included in the
-transaction.
+Trong mô hình UTxO đơn giản, cái gọi là địa chỉ khóa công khai, trong đó địa chỉ được cung cấp bởi hàm băm của khóa công khai. Nếu một UTxO nằm ở địa chỉ khóa công khai như vậy, thì một giao dịch có thể sử dụng UTxO đó làm đầu vào nếu chữ ký thuộc khóa công khai đó được bao gồm trong giao dịch.
 
-What the (E)UTxO model does is extend this by adding script addresses
-that can run arbitrary logic.
+Những gì mô hình (E) UTxO làm là mở rộng điều này bằng cách thêm các địa chỉ tập lệnh có thể chạy logic tùy ý.
 
-When a transaction wants to consume a UTxO sitting at a script address
-is validated by a node, the node will run the script and then, depending
-on the result of the script, decide whether the transaction is valid or
-not.
+Khi một giao dịch muốn sử dụng UTxO ở một địa chỉ tập lệnh được xác thực bởi một nút, thì nút đó sẽ chạy tập lệnh và sau đó, tùy thuộc vào kết quả của tập lệnh, quyết định xem giao dịch có hợp lệ hay không.
 
-And recall that two were three more additions:
+Và nhớ lại rằng hai là ba bổ sung nữa:
 
-1. Instead of just having signatures on transactions, we have so-called
-   Redeemers - arbitrary pieces of data.
-2. On the UTxO output side, we have an additional arbitrary piece of
-   data called Datum, which you can think of as a little piece of state
-   that sits on the UTxO.
+Thay vì chỉ có chữ ký trên các giao dịch, chúng tôi có cái gọi là Người nhận thừa - các phần dữ liệu tùy ý.
+Ở phía đầu ra UTxO, chúng tôi có một phần dữ liệu tùy ý bổ sung được gọi là Datum, bạn có thể coi đây là một phần nhỏ của trạng thái nằm trên UTxO.
+Cuối cùng, chúng ta có bối cảnh. Có nhiều lựa chọn khác nhau về bối cảnh này có thể là gì. Nó có thể rất hạn chế, chỉ bao gồm Chúa cứu thế (như trong Bitcoin) hoặc rất toàn cầu, bao gồm toàn bộ trạng thái của blockchain (như trong Ethereum). Trong Cardano, đó là giao dịch đang được xác thực, bao gồm tất cả các đầu vào và đầu ra của nó.
 
-Finally, we have the context. There are various choices of what this context can be. It can be very restrictive, consisting just of the Redeemer (as in Bitcoin), or very global, consisting of the whole 
-state of the blockchain (as in Ethereum). In Cardano, it is the transaction that is being validated, including all its inputs and outputs.
+Vì vậy, có ba phần dữ liệu mà một tập lệnh Plutus nhận được. Datum, đặt tại UTxO, người mua lại, đến từ đầu vào và xác thực, và ngữ cảnh, bao gồm giao dịch đang được xác thực và các đầu vào và đầu ra của nó.
 
-So, there are three pieces of data that a Plutus script gets. The Datum,
-sitting at the UTxO, the redeemer, coming from the input and the
-validation, and the context, consisting of the transaction being
-validated and its inputs and outputs.
+Trong một triển khai cụ thể như Plutus, những phần thông tin này cần được biểu diễn bằng một kiểu dữ liệu cụ thể - kiểu dữ liệu Haskell. Khi nó xảy ra, lựa chọn đã được thực hiện để sử dụng cùng một kiểu dữ liệu cho cả ba người trong số họ. Ít nhất là ở mức độ thực hiện thấp.
 
-In a concrete implementation like Plutus, these pieces of information need to be represented by a concrete data type - a Haskell data type. As it happens, 
-the choice was made to use the same data type for all three of them. At least at the low-level implementation.
-
-We will look at that first, but in real life nobody would actually use this low-level approach. There are more convenient ways to use more suitable data
-types for these things, and we will come to that later in this lecture.
+Chúng ta sẽ xem xét điều đó đầu tiên, nhưng trong cuộc sống thực không ai thực sự sử dụng phương pháp tiếp cận cấp thấp này. Có nhiều cách thuận tiện hơn để sử dụng các kiểu dữ liệu phù hợp hơn cho những việc này, và chúng ta sẽ đề cập đến vấn đề đó ở phần sau của bài giảng này.
 
 PlutusTx.Data
 -------------
 
-As mentioned, the datum, redeemer and context share a data type. 
+Như đề cập, the datum, redeemer and context chia sẻ một kiểu dữ liệu. 
 
-That data type is defined in the package ``plutus-core``, in the module ``PlutusCore.Data``.
+Kiểu dữ liệu đó được đống gói trong ``plutus-core``, trong mô-đul ``PlutusCore.Data``.
 
-It is called, simply, ``Data``.
+Nó đực gọi đơn giản là  ``Data``.
 
 .. code:: haskell
 
@@ -110,39 +80,38 @@ It is called, simply, ``Data``.
          deriving stock (Show, Eq, Ord, Generic)
          deriving anyclass (NFData)
 
-It has five constructors.
+Nó có 5 hàm tạo.
 
--  ``Constr`` takes an Integer and, recursively, a list of ``Data``
--  ``Map`` takes a list of pairs of *Data*. You can think of this as a lookup table of key-value pairs where both the key and the value are of type ``Data``
--  ``List`` takes a list of ``Data``
--  ``I`` takes a single Integer
--  ``B`` takes a Bytestring
+-  ``Constr`` lấy một Số nguyên và, một cách đệ quy, một danh sách ``Data``
+-  ``Map`` lấy một danh sách các cặp *Data*. Bạn có thể coi đây là một bảng tra cứu các cặp khóa-giá trị trong đó cả khóa và giá trị đều thuộc loại ``Data``
+-  ``List`` lấy một danh sách ``Data``
+-  ``I`` lấy một số nguyên duy nhất
+-  ``B`` lấy một chuỗi Byte
 
-For those familiar with the JSON format, this is very similar. The constructors are not exactly the same, but, like JSON, you can represent
-numbers, strings, lists of data and key-value pairs. It can represent arbitrary data, which makes it very suitable for our purpose.
+Đối với những người quen thuộc với định dạng JSON, điều này rất giống. Các hàm tạo không hoàn toàn giống nhau, nhưng giống như JSON, bạn có thể biểu diễn số, chuỗi, danh sách dữ liệu và các cặp khóa-giá trị. Nó có thể đại diện cho dữ liệu tùy ý, điều này làm cho nó rất phù hợp với mục đích của chúng tôi.
 
-We can also explore this type in the REPL.
+Chúng ta cũng có thể khám phá loại này trong REPL.
 
-Run the following from the plutus-pioneers-program repository. You may need to start a nix-shell from the Plutus repository before changing into the ``week02`` directory.
+Chạy phần sau từ kho lưu trữ chương trình tiên phong của plutus. Bạn có thể cần khởi động nix-shell từ kho lưu trữ Plutus trước khi thay đổi vào thư mục ``week02``.
 
 ::
 
       cd code/week02
       cabal repl
 
-From with the REPL, we need to import ``PlutusTx`` so that we have access to the ``Data`` type. ``Data`` is not defined in ``PlutusTx``, but it gets re-exported from there.
+Từ REPL, chúng ta cần  import ``PlutusTx`` để chúng có quyền truy cập vào``Data`` . ``Data`` không được định nghĩa trong ``PlutusTx``, nhưng nó được tái xuất từ đó.
 
 ::
 
       import PlutusTx
 
-We can now get some information about ``Data``.
+chúng ta có thể thấy thông tin về ``Data``.
 
 ::
 
       :i Data
 
-This will give information about the type *Data*.
+Điều này chung ta có thể nhận được một số thông tin về *Data*.
 
 .. code:: haskell
 
@@ -164,22 +133,21 @@ This will give information about the type *Data*.
         -- Defined in ‘plutus-core-0.1.0.0:PlutusCore.Data’
       instance IsData Data -- Defined in ‘PlutusTx.IsData.Class’
       
-Now we can play with it. We can use the ``I`` constructor to create a value of type ``Data``.
+Bây giờ chúng ta có thể chơi với nó. Chúng ta có thể sử dụng hàm ``I`` tạo để tạo một giá trị của kiểu ``Data``.
 
 .. code:: haskell
 
       Prelude PlutusTx.Data Week02.Burn> I 42
       I 42
 
-We can ask for its type, and confirm that it is indeed of type ``Data``:
+Chúng ta có thể hỏi loại của nó và xác nhận rằng nó thực sự thuộc loại ``Data``:
 
 .. code:: haskell
 
       Prelude PlutusTx.Data Week02.Burn> :t I 42
       I 42 :: Data
 
-The easiest way to create a value of type ``Data`` using the ``B`` constructor is to use the GHC Extension ``OverloadedStrings``. This allows
-literal strings to be used in place of string-like data types and the compiler will interpret them as their intended type.
+TCách dễ nhất để tạo một giá trị kiểu ``Data`` bằng cách sử dụng hàm ``B`` tạo là sử dụng Phần mở rộng GHC ``OverloadedStrings``. Điều này cho phép các chuỗi ký tự được sử dụng thay cho các kiểu dữ liệu giống chuỗi và trình biên dịch sẽ diễn giải chúng như kiểu dự định của chúng.
 
 .. code:: haskell
 
@@ -187,7 +155,7 @@ literal strings to be used in place of string-like data types and the compiler w
       Prelude PlutusTx.Data Week02.Burn> :t B "Haskell"
       B "Haskell" :: Data
 
-We can also use more complicated constructors, like ``Map`` and ``List``:
+Chúng ta cũng có thể sử dụng các hàm tạo phức tạp hơn, như ``Map`` and ``List``:
 
 .. code:: haskell
 
@@ -197,15 +165,15 @@ We can also use more complicated constructors, like ``Map`` and ``List``:
 Plutus Validator
 ----------------
 
-Now we are ready to implement our very first validator.
+Bây giờ chúng tôi đã sẵn sàng triển khai trình xác thực đầu tiên của mình..
 
-Example 1 - The Gift Contract
+Ví dụ 1 - Hợp đồng Gift 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The Code
 ++++++++
 
-We start the script by copy pasting a list of GHC language extensions, plus some dependency imports from the example we used in the last lecture.
+Chúng tôi bắt đầu tập lệnh bằng cách sao chép, dán danh sách các phần mở rộng ngôn ngữ GHC, cộng với một số phần nhập phụ thuộc từ ví dụ mà chúng tôi đã sử dụng trong bài giảng trước.
 
 .. code:: haskell
 
@@ -220,20 +188,17 @@ We start the script by copy pasting a list of GHC language extensions, plus some
       ...
       import           Text.Printf         (printf)
 
-Then, we write the validator. Ultimately, the validator will be a script, living on the blockchain in Plutus Core, which is a lower-level language based on the 
-lambda calculus. But, we don't have to write Plutus Core. We can write Haskell and we will see later how we convert that Haskell into Plutus Core script.
+Sau đó, chúng tôi viết trình xác nhận. Cuối cùng, trình xác thực sẽ là một tập lệnh, sống trên blockchain trong Plutus Core, là một ngôn ngữ cấp thấp hơn dựa trên phép tính lambda. Nhưng, chúng ta không cần phải viết Plutus Core. Chúng ta có thể viết Haskell và sau này chúng ta sẽ xem cách chúng ta chuyển đổi Haskell đó thành tập lệnh Plutus Core.
 
-So, we write a Haskell function that represents our validator. As we know, a validator is a script that takes three pieces of 
-input - the datum, the redeemer and the context, respectively, which, at the lowest level are represented by the ``Data`` data type.
+Vì vậy, chúng tôi viết một hàm Haskell đại diện cho trình xác thực của chúng tôi. Như chúng ta đã biết, trình xác thực là một tập lệnh có ba phần đầu vào - dữ liệu, trình đổi và ngữ cảnh, tương ứng, ở cấp thấp nhất được biểu thị bằng ``Data`` kiểu dữ liệu.
 
 .. code:: haskell
 
       mkValidator :: Data -> Data -> Data -> ()
 
-Somewhat surprisingly, the result of the function is ``()``. This is the Haskell ``Unit`` type, similar to ``void`` in some other languages, like C
-or C# or Java - it's the type that carries no information.
+Hơi ngạc nhiên, kết quả của hàm là ``()``. Trong Haskell ``Unit`` kiểu, tương tự như ``void`` trong một số ngôn ngữ khác, như C hoặc C # hoặc Java - đó là kiểu không mang thông tin.
 
-``Unit`` is a built-in type in Haskell and it has just one value, which is written in the same way as the type itself, as we can see from the REPL.
+``Unit`` là một kiểu tích hợp sẵn trong Haskell và nó chỉ có một giá trị, được viết theo cùng một cách với chính kiểu đó, như chúng ta có thể thấy từ REPL.
 
 .. code:: haskell
 
@@ -242,72 +207,61 @@ or C# or Java - it's the type that carries no information.
       Prelude Week02.Gift> :t ()
       () :: ()
 
-A function with a return type of ``()`` is quite unusual in Haskell. In more mainstream languages, it is quite common for functions or procedures to
-return no value. In these situations, the functions are only important for their side-effects, such as a Java function that prints something to
-the console.
+Một hàm có kiểu trả về ``()`` là khá bất thường trong Haskell. Trong các ngôn ngữ chính thống hơn, việc các hàm hoặc thủ tục không trả về giá trị là điều khá phổ biến. Trong những tình huống này, các hàm chỉ quan trọng đối với các tác dụng phụ của chúng, chẳng hạn như hàm Java in nội dung nào đó ra bảng điều khiển.
 
-But Haskell is a pure language. If you want side-effects, this will be shown by the type system. For example if the mkValidator were to perform
-any IO, it would have a type signature of:
+Nhưng Haskell là một ngôn ngữ thuần túy. Nếu bạn muốn có tác dụng phụ, điều này sẽ được hiển thị bởi hệ thống loại. Ví dụ: nếu mkValidator thực hiện bất kỳ IO nào, nó sẽ có chữ ký kiểu:
 
 .. code:: haskell
 
       mkValidator :: Data -> Data -> Data -> IO ()
 
-This would indicate a function that performs IO side-effects but has no interesting return value.
+Điều này sẽ chỉ ra một hàm thực hiện các tác dụng phụ IO nhưng không có giá trị trả về thú vị.
 
-But, as we know that the real ``mkValidator`` function performs no side-effects and returns no value, there is really nothing useful that it can do.
+Nhưng, như chúng ta biết rằng ``mkValidator`` hàm thực không thực hiện tác dụng phụ và không trả về giá trị nào, thực sự không có gì hữu ích mà nó có thể làm được.
 
-However, there is something that the function can do as well as returning ``()``, namely it can throw an exception or have an error. And that's what Plutus uses.
+Tuy nhiên, có điều gì đó mà hàm có thể làm cũng như trả về ``()``, cụ thể là nó có thể ném ra một ngoại lệ hoặc có lỗi. Và đó là những gì Plutus sử dụng.
 
-The idea is that if the ``mkValidator`` function does not run into an error or throw an exception, then validation succeeds. If it throws an error then 
-validation fails and the transaction is rejected.
+Ý tưởng là nếu ``mkValidatorhàm`` không gặp lỗi hoặc đưa ra một ngoại lệ, thì quá trình xác nhận sẽ thành công. Nếu nó xuất hiện một lỗi thì việc xác thực không thành công và giao dịch bị từ chối.
 
-Let's write the simplest validator that we can.
+Hãy viết trình xác nhận đơn giản nhất mà chúng ta có thể.
 
 .. code:: haskell
 
       mkValidator :: Data -> Data -> Data -> ()
       mkValidator _ _ _ = ()
 
-The first argument is the datum, the second argument is the redeemer and the third argument is the context. The most simple thing we can do is to completely ignore all three arguments and immediately return ``()``.
+Đối số đầu tiên là dữ liệu, đối số thứ hai là trình chuộc và đối số thứ ba là ngữ cảnh. Điều đơn giản nhất mà chúng ta có thể làm là hoàn toàn bỏ qua cả ba đối số và quay trở lại ngay lập tức ``()``.
 
-What this means is that the script address that corresponds to this validator doesn't care about the datum, it doesn't care about the redeemer, and 
-it doesn't care about the Context. It will always succeed, and this means that any transaction can consume the script at this address as an input. It does not matter
-what datum exists for a UTxO at this script address, it doesn't matter which redeemer is used for the transaction and it doesn't matter what structure the transaction has.
+Điều này có nghĩa là địa chỉ tập lệnh tương ứng với trình xác thực này không quan tâm đến dữ liệu, nó không quan tâm đến trình đổi và không quan tâm đến ngữ cảnh. Nó sẽ luôn thành công và điều này có nghĩa là bất kỳ giao dịch nào cũng có thể sử dụng tập lệnh tại địa chỉ này làm đầu vào. Không quan trọng dữ liệu nào tồn tại cho UTxO tại địa chỉ tập lệnh này, không quan trọng công cụ đổi quà nào được sử dụng cho giao dịch và giao dịch có cấu trúc nào không quan trọng.
 
-If you send any funds to this script address, anybody can immediately take it.
+Nếu bạn gửi bất kỳ khoản tiền nào đến địa chỉ tập lệnh này, bất kỳ ai cũng có thể nhận ngay.
 
-This function is not yet Plutus code, it is just a Haskell function. In order to turn it into a Plutus script, we need to compile it.
+Hàm này chưa phải là mã Plutus, nó chỉ là một hàm Haskell. Để biến nó thành một tập lệnh Plutus, chúng ta cần phải biên dịch nó.
 
-The result of our compilation to Plutus will be of type ``Validator``. Below the function in ``Gift.hs``, we add the following code.
+Kết quả của quá trình biên dịch của chúng tôi sang Plutus sẽ thuộc loại ``Validator``. Bên dưới hàm trong ``Gift.hs``, chúng tôi thêm đoạn mã sau.
 
 .. code:: haskell
 
       validator :: Validator
       validator = mkValidatorScript $$(PlutusTx.compile [|| mkValidator ||])
 
-The ``mkValidatorScript`` function takes the type ``CompiledCode (Data -> Data -> Data -> ()) -> Validator``. In order to create this type, we must compile 
-the ``mkValidator`` script using something called Template Haskell.
+Các chức năng ``mkValidatorScript``  mang kiểu ``CompiledCode (Data -> Data -> Data -> ()) -> Validator``. Nhằm mục đích tạo kiểu này và biên dịch tập lệnh ``mkValidator`` bằng cách sử dụng một thứ gọi là Template Haskell.
 
-Template Haskell is an advanced feature of Haskell that solves a similar problem as macro systems in other languages. A macro being something that gets 
-expanded at compile time.
+Template Haskell là một tính năng nâng cao của Haskell giải quyết một vấn đề tương tự như các hệ thống macro trong các ngôn ngữ khác. Macro là thứ được mở rộng tại thời điểm biên dịch.
 
-So, with this code
+Vì vậy, với mã này
 
 .. code:: haskell
 
       $$(PlutusTx.compile [|| mkValidator ||])
 
-We are asking the compiler to write the code for the ``validator`` function at compile time based on our ``mkValidator`` function, and then proceed 
-with the normal compilation.
+Chúng tôi đang yêu cầu trình biên dịch viết mã cho hàm ``validator``  tại thời điểm biên dịch dựa trên ``mkValidatorhàm`` của chúng ta , và sau đó tiến hành biên dịch bình thường.
 
-You do not need to understand very much about Template Haskell to write Plutus as it is always the same pattern. Once you have seen a couple of
-examples, you can more or less just copy and paste.
+Bạn không cần phải hiểu nhiều về Template Haskell để viết Plutus vì nó luôn luôn giống nhau. Khi bạn đã xem một vài ví dụ, bạn có thể ít nhiều chỉ cần sao chép và dán.
 
-Template Haskell expects all the code to be available within the Oxford Brackets - ``[| |]``. 
+Mẫu Haskell hy vọng tất cả mã sẽ có sẵn trong Oxford Brackets - ``[| |]``.
 
-With more complicated validators you will likely be relying on multiple helper functions, and you do not want to have to add them within the Oxford Brackets. To avoid this, there is one thing we 
-need to do to the ``mkValidator`` function, and that is to make it inlinable by adding the ``INLINABLE`` pragma.
+Với các trình xác thực phức tạp hơn, bạn có thể sẽ dựa vào nhiều hàm trợ giúp và bạn không muốn phải thêm chúng vào trong Dấu ngoặc đơn Oxford. Để tránh điều này, có một điều chúng ta cần làm đối với ``mkValidator`` hàm và đó là làm cho nó có thể nhập được bằng cách thêm thông số ``INLINABLE``.
 
 .. code:: haskell
 
@@ -315,10 +269,9 @@ need to do to the ``mkValidator`` function, and that is to make it inlinable by 
       mkValidator :: Data -> Data -> Data -> ()
       mkValidator _ _ _ = ()
 
-You will see this often in Plutus scripts, and it is usually an indication that a function is meant to be used within a validation script. All 
-the functions on which the validator depends must be inlinable.
+Bạn sẽ thấy điều này thường xuyên trong các tập lệnh Plutus và nó thường là một dấu hiệu cho thấy một hàm được sử dụng trong một tập lệnh xác thực. Tất cả các chức năng mà trình xác nhận phụ thuộc phải có thể nhập được.
 
-Let's go back to the REPL and take a look at the validator.
+Hãy quay lại REPL và xem xét trình xác nhận.
 
 .. code:: haskell
 
@@ -328,7 +281,7 @@ Let's go back to the REPL and take a look at the validator.
       Prelude PlutusTx Ledger.Scripts Week02.Gift> validator
       Validator { <script> }
 
-We can ask for information about ``Validator``.
+Chúng tôi có thể yêu cầu thông tin về ``Validator``.
 
 .. code:: haskell
 
@@ -343,14 +296,14 @@ We can ask for information about ``Validator``.
       instance Show Validator
         -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’
 
-We see that it is a wrapper around ``getValidator``
+Chúng ta thấy rằng nó là một lớp bao bọc xung quanh ``getValidator``
 
 .. code:: haskell
 
       Prelude PlutusTx Ledger.Scripts Week02.Gift> getValidator validator
       <Script>
 
-We can then get some information about ``Script``
+Sau đó, chúng ta có thể lấy một số thông tin về ``Script``
 
 .. code:: haskell
 
@@ -370,37 +323,36 @@ We can then get some information about ``Script``
       instance Show Script
         -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’
       
-And here we see that we have an ``unScript`` function, which we can run
+Và ở đây chúng ta thấy rằng chúng ta có một unScripthàm, chúng ta có thể chạy
 
 .. code:: haskell
 
       Prelude PlutusTx Ledger.Scripts Week02.Gift> unScript $ getValidator validator
       Program () (Version () 1 0 0) (Apply () (Apply () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Apply () (Apply () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Apply () (Apply () (Apply () (Apply () (Apply () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Apply () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 5})))))))) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1})))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Var () (DeBruijn {dbnIndex = 5})) (Var () (DeBruijn {dbnIndex = 6}))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Apply () (Var () (DeBruijn {dbnIndex = 4})) (Var () (DeBruijn {dbnIndex = 7}))) (Var () (DeBruijn {dbnIndex = 6})))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Var () (DeBruijn {dbnIndex = 3})) (Var () (DeBruijn {dbnIndex = 6}))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Var () (DeBruijn {dbnIndex = 2})) (Var () (DeBruijn {dbnIndex = 6}))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Var () (DeBruijn {dbnIndex = 1})) (Var () (DeBruijn {dbnIndex = 6}))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))))))) (Delay () (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 2}))))))) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Apply () (Var () (DeBruijn {dbnIndex = 1})) (Var () (DeBruijn {dbnIndex = 4}))) (Var () (DeBruijn {dbnIndex = 3})))))))))) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))))))) (Delay () (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (Apply () (Apply () (Var () (DeBruijn {dbnIndex = 1})) (Var () (DeBruijn {dbnIndex = 3}))) (Var () (DeBruijn {dbnIndex = 2})))))))))) (Delay () (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))))))
       
-And here you can see an honest-to-goodness representation of the Plutus Core script for the validator.
+Và ở đây bạn có thể thấy bản trình bày trung thực đến tốt đẹp của tập lệnh Plutus Core cho trình xác thực.
 
-Back to the code.
+Quay lại mã.
 
-Now we have our first validator, there are two more types that we can define.
+Bây giờ chúng tôi có trình xác thực đầu tiên của mình, có hai loại nữa mà chúng tôi có thể xác định.
 
-One is the ``ValidatorHash``, which, as the name suggests is the hash of the validator.
+Một là ''ValidatorHash'', như tên cho thấy, là băm của trình xác nhận.
 
 .. code:: haskell
 
       valHash :: Ledger.ValidatorHash
       valHash = Scripts.validatorHash validator
 
-And, we can also turn the validator into a script address, which is the script's address on the blockchain.
+Và, chúng tôi cũng có thể biến trình xác thực thành địa chỉ tập lệnh, là địa chỉ của tập lệnh trên blockchain.
 
 .. code:: haskell
 
       scrAddress :: Ledger.Address
       scrAddress = ScriptAddress valHash
 
-Now we have a script address represented as ``scrAddress``.
+Bây giờ chúng ta có một địa chỉ tập lệnh được biểu diễn dưới dạng ``scrAddress``.
 
-We can look at these two results in the REPL
-
+Chúng ta có thể xem xét hai kết quả này trong REPL
 .. code:: haskell
 
       Prelude PlutusTx Ledger.Scripts Week02.Gift> valHash
@@ -409,19 +361,15 @@ We can look at these two results in the REPL
       Prelude PlutusTx Ledger.Scripts Week02.Gift> scrAddress
       Address {addressCredential = ScriptCredential c3168d465a84b7f50c2eeb51ccacd53a305bd7883787adb54236d8d17535ca14, addressStakingCredential = Nothing}
 
-With the exception of the ``mkValidator`` function logic (in our case, one
-line), the rest of the code we have written so far is boilerplate and
-will be very similar for all Plutus scripts.
+Ngoại trừ hàm logic ``mkValidator`` (trong trường hợp của chúng ta là một dòng), phần còn lại của mã chúng ta đã viết cho đến nay là bản soạn sẵn và sẽ rất giống nhau đối với tất cả các tập lệnh Plutus.
 
-In order to actually try this script, we need wallet code. The focus of
-this lecture is validation and not wallet code, but briefly, here is the
-rest of the code.
+Để thực sự thử tập lệnh này, chúng tôi cần mã ví. Trọng tâm của bài giảng này là xác nhận và không phải mã ví, nhưng ngắn gọn, đây là phần còn lại của mã.
 
-Two endpoints are defined. Endpoints are ways for a user to trigger something with input parameters.
+Hai điểm cuối được xác định. Điểm cuối là cách để người dùng kích hoạt một thứ gì đó với các tham số đầu vào.
 
-The ``give`` endpoint will take an ``Integer`` argument to specify the number of lovelace that will be deposited to the contract. 
+``Endpoint give`` sẽ lấy một đối số ``Integer`` để chỉ định số lượng lovelace sẽ được gửi vào hợp đồng.
 
-The ``grab`` endpoint will take no argument and will simply look for UTxOs at this script address and consume them.
+``Endpoint grab``  sẽ không có đối số và sẽ đơn giản tìm kiếm các UTxO tại địa chỉ tập lệnh này và sử dụng chúng.
 
 .. code:: haskell
 
@@ -429,13 +377,11 @@ The ``grab`` endpoint will take no argument and will simply look for UTxOs at th
                   Endpoint "give" Integer
               .\/ Endpoint "grab" ()
 
-The ``give`` endpoint uses the helper function ``mustPayToOtherScript`` which takes the ``valHash`` of the recipient script and a ``Datum`` that, in this example, is 
-completely ignored. It uses the ``Datum`` constructor to turn a ``Data`` into a ``Datum``. In this case the ``Data`` is created using
-the ``Constr`` constructor taking a 0 and an empty list. 
+``endpoint give``  ử dụng hàm trợ giúp ``mustPayToOtherScript`` hàm này lấy ``valHash`` của tập lệnh người nhận và một hàm ``Datum`` Cái mà trong ví dụ này là hoàn toàn bị bỏ qua. nó sử dụng hàm tạo ``Datum`` để biến ``Data`` thành ``Datum``. Trong trường hợp này ``Data`` được sử dụng bằng cách sử dụng ``Constr`` hàm tạo lấy 0 và một danh sách trống. 
 
-Finally the amount to send to the address is specified using the helper function ``Ada.lovelaceValueOf``.
+Cuối cùng số tiền cần gửi đến địa chỉ được chỉ định bằng cách sử dụng chức năng trợ giúp ``Ada.lovelaceValueOf``.
 
-The transaction is then submitted, the script waits for it to be confirmed and then prints a log message.
+Giao dịch sau đó được gửi đi, tập lệnh chờ nó được xác nhận và sau đó in thông báo nhật ký.
 
 .. code:: haskell
 
@@ -446,18 +392,15 @@ The transaction is then submitted, the script waits for it to be confirmed and t
          void $ awaitTxConfirmed $ txId ledgerTx
          logInfo @String $ printf "made a gift of %d lovelace" amount
 
-The ``grab`` endpoint is a little bit more complicated. 
+``endpoint grab``  phức tạp hơn một chút.
 
-We use ``utxoAt`` with our new script address ``scrAddress`` to lookup all the UTxOs sitting at that address. We then need lookups, which will be used by the wallet
-to construct the transaction. Here, we tell the wallet where to find all the UTxOs, and we inform it about the validator. Remember, if you want to consume a UTxO
-sitting at a script address, then the spending transaction needs to provide the validator code, whereas the transaction that produces the UTxO only needs to provide the hash.
+Chúng tôi sử dụng ``utxoAt`` địa chỉ tập lệnh mới của mình ``scrAddress`` để tra cứu tất cả các UTxO ở địa chỉ đó. Sau đó, chúng tôi cần tra cứu, sẽ được sử dụng bởi ví để tạo giao dịch. Tại đây, chúng tôi cho ví biết nơi tìm tất cả các UTxO và chúng tôi thông báo cho ví về trình xác thực. Hãy nhớ rằng, nếu bạn muốn sử dụng UTxO ở một địa chỉ tập lệnh, thì giao dịch chi tiêu cần cung cấp mã xác thực, trong khi giao dịch tạo ra UTxO chỉ cần cung cấp hàm băm.
 
-We then define the transaction by using ``mustSpendScriptOutput`` for each UTxO found. This is saying that every UTxO sitting at this script address must be spent
-by the transaction we are constructing.
+Sau đó, chúng tôi xác định giao dịch bằng cách sử dụng ``mustSpendScriptOutput`` cho mỗi UTxO được tìm thấy. Điều này nói lên rằng mọi UTxO ở địa chỉ tập lệnh này phải được chi tiêu bằng giao dịch mà chúng tôi đang xây dựng.
 
-We also pass a redeemer which is completely ignored in our example, so we can put anything there - in this case a redeemer created using the ``I`` constructor of type ``Data`` with a value of ``17``.
+Chúng tôi cũng chuyển một công cụ đổi quà hoàn toàn bị bỏ qua trong ví dụ của chúng tôi, vì vậy chúng tôi có thể đặt bất kỳ thứ gì ở đó - trong trường hợp này, một công cụ đổi quà được tạo bằng cách sử dụng hàm tạo ``I`` của loại ``Data `` có giá trị là ``17``.
 
-Again, we submit, wait for confirmation, and then write a log message.
+Một lần nữa, chúng tôi gửi, chờ xác nhận và sau đó viết thông báo nhật ký.
 
 .. code:: haskell
 
@@ -473,9 +416,7 @@ Again, we submit, wait for confirmation, and then write a log message.
          void $ awaitTxConfirmed $ txId ledgerTx
          logInfo @String $ "collected gifts"
 
-Finally, we put it all together in the ``endpoints`` function. This is boilerplate code that is telling the wallet to give the option of certain endpoints to 
-the user and then, once one has been selected, to recurse and continue to offer the same options again and again. In the case of ``give`` the user will be
-required to provide the ``Integer`` argument.
+Cuối cùng, chúng tôi đặt tất cả lại với nhau trong hàm ``endpoints``. Đây là mã soạn sẵn thông báo cho ví cung cấp tùy chọn của một số điểm cuối nhất định cho người dùng và sau đó, khi một điểm cuối đã được chọn, sẽ lặp lại và tiếp tục cung cấp các tùy chọn tương tự lặp đi lặp lại. Trong trường hợp của ``give`` người dùng sẽ được yêu cầu cung cấp đối số ``Integer`` .
 
 .. code:: haskell
 
@@ -485,76 +426,70 @@ required to provide the ``Integer`` argument.
           give' = endpoint @"give" >>= give
           grab' = endpoint @"grab" >>  grab
 
-Then we have a little piece of boilerplate.
+Sau đó, chúng tôi có một lệnh nhỏ.
 
 .. code:: haskell
 
       mkSchemaDefinitions ''GiftSchema
 
-And then some code that is used only by the Plutus Playground which allows us to specify additional tokens that can be used for testing.
+Và sau đó một số mã chỉ được sử dụng bởi Plutus Playground cho phép chúng tôi chỉ định các mã thông báo bổ sung có thể được sử dụng để thử nghiệm.
 
 .. code:: haskell
 
          mkKnownCurrencies []
 
-Testing
+Thử Nghiệm
 +++++++
 
-We will now test the ``Gift`` script in the playground.
+Bây giờ chúng tôi sẽ thử nghiệm script ``Gift`` trong playground.
 
-Copy the ``Gift`` script into the playground, then compile the script in the playground and press the ``Simulate`` button.
+Bạn Copy ``Gift`` vào playground, sau đó biên dịch tập lệnh trong playground and nhấn nút ``Simulate``.
 
 .. figure:: img/playground_week2_1.png
 
-And let's add a third wallet and give all the wallets 10 Ada (10 million lovelace).
+Giờ hãy thêm một chiếc ví thứ ba và cung cấp cho tất cả các ví 10 Ada (10 triệu lovelace).
 
 .. figure:: img/iteration2/pic__00024.png
 
-We will create a scenario where wallets 1 and 2 give lovelace, and wallet 3 grabs all of it.
+Chúng tôi sẽ tạo một kịch bản trong đó ví 1 và 2 cho cảm giác yêu thích và ví 3 lấy tất cả.
 
-You will see that the playground has rendered UI buttons for the two endpoints ``give`` and ``grab``. Use the ``give`` endpoint for to make wallet 1 give 4 Ada and
-to make wallet 2 give 6 Ada. Then add a wait action to wait for 1 block, and then use to ``grab`` endpoint to make wallet 3 grab the funds. Then add another wait action to wait
-for 1 block.
+Bạn sẽ thấy rằng sân chơi đã hiển thị các nút giao diện người dùng cho hai endpoints ``give`` và ``grab``. Sử dung ``endpoint give`` để tạo ví 1 tặng 4 Ada và để tạo ví 2 tặng 6 Ada. Sau đó, thêm hành động chờ để đợi 1 khối, và sau đó sử dụng vào endpoints ``grab`` để tạo ví 3 lấy tiền. Sau đó, thêm một hành động chờ khác để đợi 1 khối.
 
 .. figure:: img/iteration2/pic__00025.png
 
-And now click ``Evaluate``. We see that there have been four transactions.
+Và bây giờ hãy nhấp vào ``Evaluate``. Chúng tôi thấy rằng đã có bốn giao dịch.
 
-The first transaction is, as always, the genesis transaction that distributes the initial funds to the wallets.
+Giao dịch đầu tiên, như mọi khi, là giao dịch khởi đầu phân phối các khoản tiền ban đầu vào ví.
 
 .. figure:: img/iteration2/pic__00026.png
    
-And there are two transactions which occur at slot 1. They are the two ``give`` transactions.
+Và có hai giao dịch xảy ra tại khe 1. Chúng là hai giao dịch ``give``
 
-The first one, Tx 0, is from wallet 2. The order here is not determined by the order that we created the transactions in the simulator. The important thing to note is that
-both ``give`` transactions occurred at the same slot.
+Lệnh đầu tiên, Tx 0, là từ ví 2. Thứ tự ở đây không được xác định bởi thứ tự mà chúng tôi đã tạo các giao dịch trong trình mô phỏng. Điều quan trọng cần lưu ý là cả hai giao dịch ``give`` đều xảy ra tại cùng một thời điểm.
 
-We see the three outputs. The first output is the 10 lovelace fee paid by wallet 2. The second output is the 6 Ada sent to the script address, and the third output is the returning of the change to wallet 2, which is 4 Ada minus the fees.
+Chúng tôi thấy ba kết quả đầu ra. Đầu ra đầu tiên là phí 10 lovelace được trả bằng ví 2. Đầu ra thứ hai là 6 Ada được gửi đến địa chỉ tập lệnh và đầu ra thứ ba là trả về thay đổi cho ví 2, là 4 Ada trừ đi phí.
 
 .. figure:: img/iteration2/pic__00027.png
 
-And the second, Tx 1, is from wallet 1. Again, with similar output UTxOs.
+Và thứ hai, Tx 1, là từ ví 1. Một lần nữa, với các UTxO đầu ra tương tự.
 
 .. figure:: img/iteration2/pic__00028.png
 
-We now have two UTxOs sitting at the script address.
+ Bây giờ chúng ta có hai UTxO ở địa chỉ tập lệnh.
 
-Then we have the ``grab`` at slot 2 triggered by wallet 3. We see the two UTxOs from the script as inputs, and then two outputs. One output is the fees and the other
-is the output, paid to wallet 3, is of 10 Ada minus those fees. You'll notice that the fees are now higher than we saw before, and this is because a script has now been
-executed, which makes it more expensive. However, the fees here are not yet entirely calibrated with those that would be charged on the real blockchain.
+Sau đó, chúng tôi có ``grab`` tại vị trí 2 được kích hoạt bởi ví 3. Chúng tôi thấy hai UTxO từ tập lệnh là đầu vào và sau đó là hai đầu ra. Một đầu ra là phí và đầu ra còn lại, được trả cho ví 3, là 10 Ada trừ đi các khoản phí đó. Bạn sẽ nhận thấy rằng phí hiện cao hơn chúng ta đã thấy trước đây và điều này là do một tập lệnh hiện đã được thực thi, điều này làm cho nó đắt hơn. Tuy nhiên, các khoản phí ở đây vẫn chưa được hiệu chỉnh hoàn toàn với những khoản phí sẽ được tính trên blockchain thực.
 
 .. figure:: img/iteration2/pic__00029.png
 
-And, by scrolling down, we see the final wallet balances.
+Và, bằng cách cuộn xuống, chúng tôi thấy số dư cuối cùng của ví.
 
 .. figure:: img/iteration2/pic__00030.png
 
-If you were to scroll down further you would see some traces and log outputs that would give more detail about the execution.
+Nếu bạn cuộn xuống sâu hơn, bạn sẽ thấy một số dấu vết và kết quả đầu ra nhật ký sẽ cung cấp thêm chi tiết về việc thực thi.
 
-As mentioned, this script uses the simplest validator possible, one that always succeeds. But this silly little validator may be useful in a
-situation where someone wants to donate some lovelace to the community and leave it up for grabs!
+Như đã đề cập, tập lệnh này sử dụng trình xác thực đơn giản nhất có thể, một trình xác thực luôn thành công. Nhưng trình xác thực nhỏ ngớ ngẩn này có thể hữu ích trong tình huống ai đó muốn đóng góp một số biểu tượng tình yêu cho cộng đồng và để lại cho bạn!
 
-Example 2 - Burn
+Ví dụ 2 - Burn
 ~~~~~~~~~~~~~~~~
 
 Let's look at the second example of validation.
