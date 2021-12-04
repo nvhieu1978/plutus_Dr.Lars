@@ -7,56 +7,48 @@ Tôi cũng sử dụng điều này để thêm nhận xét vào mã.
 
 ## Bài giảng
 
-- [Video Bài giảng số 1](https://youtu.be/CJD8ctJqDw0)
-- [Html Bài giảng số 1](docs/week1.rst)
+- Bài giảng số 1: [Video ](https://youtu.be/CJD8ctJqDw0), [Html](docs/week1.rst)
 
   - Welcome
   - (E)UTxO-model
   - Chạy một hợp đồng đấu giá mẫu trên một Playground
   - Bài tập về nhà
 
-- [Video Bài giảng số 2](https://youtu.be/7nDGZkUIeUQ)
-- [Html Bài giảng số 2](docs/week2.rst)
+- Bài giảng số 2: [Video ](https://youtu.be/7nDGZkUIeUQ), [Html](docs/week2.rst)
 
   - Kích hoạt sự thay đổi.
   - Low-level, Các tập lệnh xác thực on-chain chưa được định kiểu.
   - High-level, Các tập lệnh xác thực on-chain định kiểu.
 
-- [Video Bài giảng số 3](https://youtu.be/WG3uw-TkW2k)
-- [Html Bài giảng số 3](docs/week3.rst)
+- Bài giảng số 3: [Video ](https://youtu.be/WG3uw-TkW2k), [Html](docs/week3.rst)
 
   - Kịch bản context.
   - Xử lý thời gian (Time handling).
   - Hợp đồng được tham số hóa (Parameterized contracts).
 
-- [Video Bài giảng số 4](https://youtu.be/6Reuh0xZDjY)
-- [Html Bài giảng số 4](docs/week4.rst)
+-  Bài giảng số 4: [Video](https://youtu.be/6Reuh0xZDjY), [Html](docs/week4.rst)
 
   - Monads
   - Đơn nguyên `EmulatorTrace`.
   - Đơn nguyên `Contract`.
 
-- [Video Bài giảng số 5](https://youtu.be/6VbhY162GQA)
-- [Html Bài giảng số 5](docs/week5.rst)
+-  Bài giảng số 5: [Video](https://youtu.be/6VbhY162GQA), [Html](docs/week5.rst)
 
   - Values.
   - Mã thông báo gốc và chính sách đúc tiền
   - NFT's.
 
-- [Video Bài giảng số 6](https://youtu.be/wY7R-PJn66g)
-- [Html Bài giảng số 6](docs/week6.rst)
+-  Bài giảng số 6: [Video](https://youtu.be/wY7R-PJn66g), [Html](docs/week6.rst)
 
   - Oracles.
   - Sử dụng PAB.
 
-- [Video Bài giảng số 7](https://youtu.be/oJupInqvJUI)
-- [Html Bài giảng số 7](docs/week7.rst)
+-  Bài giảng số 7: [Video](https://youtu.be/oJupInqvJUI), [Html](docs/week7.rst)
 
   - Commit schemes.
   - Máy trạng thái (State machines).
 
-- [Video Bài giảng số 8](https://youtu.be/JMRwkMgaBOg)
-- [Html Bài giảng số 8](docs/week8.rst)
+-  Bài giảng số 8: [Video](https://youtu.be/JMRwkMgaBOg), [Html](docs/week8.rst)
 
   - Ví dụ khác về state machine: token sale.
   - Kiểm tra tự động sử dụng dấu vết giả lập (emulator traces).
@@ -64,15 +56,13 @@ Tôi cũng sử dụng điều này để thêm nhận xét vào mã.
   - Kiểm tra tài sản với `QuickCheck`.
   - Thử nghiệm hợp đồng Plutus với thử nghiệm dựa trên tài sản.
 
-- [Video Bài giảng số 9](https://youtu.be/-RpCqHuxfQQ)
-- [Html Bài giảng số 9](docs/week9.rst)
+-  Bài giảng số 9: [Video](https://youtu.be/-RpCqHuxfQQ), [Html](docs/week9.rst)
 
   - Tổng quan về Marlowe.  [Site](https://github.com/input-output-hk/plutus-pioneer-program/blob/main/Marlowe_Plutus_Pioneers_June_2021.pdf)
   - Marlowe trong Plutus.
   - Giới thiệu Marlowe Playground.
 
-- [Video Bài giảng số 10](https://youtu.be/Dg36h9YPMz4)
-- [Html Bài giảng số 10](docs/week10.rst)
+-  Bài giảng số 10: [Video](https://youtu.be/Dg36h9YPMz4), [Html](docs/week10.rst)
 
   - Giới thiệu Uniswap.
   - Triển khai Uniswap trong Plutus.
@@ -85,7 +75,7 @@ Tôi cũng sử dụng điều này để thêm nhận xét vào mã.
 - Lecture #1:  [English Auction](code/week01)
 - Lecture #2:  [Simple Validation](code/week02)
 - Lecture #3:  [Validation Context & Parameterized Contracts](code/week03)
-- Lecture #4:  [Monads, `EmulatorTrace` & `Contract`](code/week04)
+- Lecture #4:  [Monads, `EmulatorTrace` & `Contract`](code/yweek04)
 - Lecture #5:  [Minting Policies](code/week05)
 - Lecture #6:  [Oracles](code/week06)
 - Lecture #7:  [State Machines](code/week07)
