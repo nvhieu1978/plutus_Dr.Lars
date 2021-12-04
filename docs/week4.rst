@@ -2,58 +2,35 @@ Week 04 - Monads
 ================
 
 .. note::
-      These is a written version of `Lecture
-      #4 <https://youtu.be/6Reuh0xZDjY>`__.
+      Đây là phiên bản viết của Bài `giảng số 4 <https://youtu.be/HLJOcKlEucI>`__.
 
-      In this lecture we learn about Monads. In particular the EmulatorTrace
-      and Contract monads.
+      Trong bài giảng này, chúng ta tìm hiểu về Đơn nguyên. Đặc biệt là các monads
+      EmulatorTrace và Contract..
 
-Overview
+Tổng quat
 --------
 
-We have spent the last two lectures talking about the on-chain part of
-Plutus - the validation logic that is compiled to Plutus script and
-actually lives on the blockchain and is executed by nodes that validate
-a transaction.
+Chúng tôi đã dành hai bài giảng cuối cùng để nói về phần on-chain của Plutus - logic xác thực được biên dịch thành tập lệnh Plutus và thực sự sống trên blockchain và được thực hiện bởi các nút xác thực giao dịch.
 
-There is a lot more to say about that on-chain part.
+Còn rất nhiều điều để nói về bộ phận on-chain đó.
 
-We haven't looked at more complex examples of validation yet that make
-more sophisticated use of the context, and we haven't see how native
-tokens work, yet (Plutus script is also used to validate the minting and
-burning of native tokens).
+Chúng tôi chưa xem xét các ví dụ phức tạp hơn về xác thực sử dụng ngữ cảnh phức tạp hơn và chúng tôi chưa thấy cách mã thông báo gốc hoạt động như thế nào (tập lệnh Plutus cũng được sử dụng để xác thực việc đúc và đốt mã thông báo gốc).
 
-We will definitely have to talk about those topics, and come back to
-that.
+Chúng ta chắc chắn sẽ phải nói về những chủ đề đó, và quay lại vấn đề đó.
 
-However, before we go into too many sophisticated topics of on-chain
-validation, we mustn't neglect the off-chain part, because it is equally
-important.
+Tuy nhiên, trước khi đi vào quá nhiều chủ đề phức tạp về xác thực trên chuỗi, chúng ta không được bỏ qua phần ngoài chuỗi, vì nó cũng quan trọng không kém.
 
-The on-chain part takes care of validation but, in order for there to be
-something to be validated, we must build a transaction and submit it to
-the blockchain. And, that is what the off-chain part does.
+Phần on-chain đảm nhận việc xác thực nhưng để có thứ gì đó được xác thực, chúng ta phải xây dựng một giao dịch và gửi nó lên blockchain. Và, đó là những gì phần off-chain thực hiện.
 
-So, we will start talking about how to write off-chain Plutus code.
+Vì vậy, chúng ta sẽ bắt đầu nói về cách viết mã Plutus ngoài chuỗi.
 
-Unfortunately there is a slight problem concerning the Haskell features
-needed.
+Thật không may, có một vấn đề nhỏ liên quan đến các tính năng Haskell cần thiết.
 
-The on-chain part that we have seen so far is somewhat alien and takes a
-little getting used to, due to the fact that we have the additional
-complication of the compilation to Plutus script. But, we don't really
-have to worry about that if we use the Template Haskell magic. In that
-case the validator function is just a plain function.
+Phần on-chain mà chúng ta đã thấy cho đến nay hơi xa lạ và cần làm quen một chút, do thực tế là chúng ta có thêm sự phức tạp của quá trình biên dịch sang tập lệnh Plutus. Nhưng, chúng ta không thực sự phải lo lắng về điều đó nếu chúng ta sử dụng phép thuật Template Haskell. Trong trường hợp đó, hàm xác nhận chỉ là một hàm đơn giản.
 
-And it is actually a very simple Haskell function from the technical
-point of view. We don't use any fancy Haskell features to write this
-function.
+Và nó thực sự là một hàm Haskell rất đơn giản theo quan điểm kỹ thuật. Chúng tôi không sử dụng bất kỳ tính năng Haskell ưa thích nào để viết hàm này.
 
-One of the reasons for that is the way Plutus compilation works. We have
-seen how, in order for the compilation to Plutus to succeed, all the
-code used by the validation function must be available within the Oxford
-Brackets. This means that all the functions relied on by the
-*mkValidator* function must use the INLINABLE pragma.
+Một trong những lý do cho điều đó là cách thức hoạt động của quá trình biên dịch Plutus. Chúng tôi đã thấy làm thế nào để việc biên dịch sang Plutus thành công, tất cả mã được sử dụng bởi hàm xác nhận phải có sẵn trong Oxford Brackets. Điều này có nghĩa là tất cả các chức năng được sử dụng bởi chức năng *mkValidator* phải sử dụng pragma INLINABLE.
 
 .. code:: haskell
 
@@ -63,41 +40,24 @@ Brackets. This means that all the functions relied on by the
 
       $$(PlutusTx.compile [|| mkValidator ||])
 
-And recall, that because the standard Haskell functions don't have this
-INLINABLE pragma, there is a new Plutus Prelude module that is similar
-to the standard Haskell Prelude, but with the functions defined with the
-INLINABLE pragma.
+Và hãy nhớ lại rằng vì các hàm Haskell tiêu chuẩn không có pragma CÓ THỂ LỆNH này, nên có một mô-đun Plutus Prelude mới tương tự như Haskell Prelude tiêu chuẩn, nhưng với các chức năng được xác định với pragma INLINABLE.
 
-But, of course, there are hundreds of Haskell libraries out there and
-most of them weren't written with Plutus in mind, so we can't use them
-inside validation. And, that has the effect that the Haskell inside
-validation will be relatively simple and won't have many dependencies.
+Nhưng, tất nhiên, có hàng trăm thư viện Haskell ngoài kia và hầu hết chúng không được viết với Plutus, vì vậy chúng tôi không thể sử dụng chúng trong quá trình xác thực. Và, điều đó có tác dụng là xác thực bên trong Haskell sẽ tương đối đơn giản và sẽ không có nhiều phụ thuộc.
 
 Monads
 ------
 
-In the off-chain part of Plutus, the situation is reversed. We don't
-have to worry about compilation to Plutus script - it is just plain
-Haskell. But, the flip side is that, the way this is implemented, it
-uses much more sophisticated Haskell features - e.g. so-called effect
-systems, streaming and, in particular, monads.
+Trong phần off-chain của Plutus, tình hình đã đảo ngược. Chúng ta không phải lo lắng về việc biên dịch sang tập lệnh Plutus - nó chỉ là Haskell đơn giản. Tuy nhiên, mặt trái của nó là, cách nó được thực hiện, nó sử dụng các tính năng Haskell phức tạp hơn nhiều - ví dụ như cái gọi là hệ thống hiệu ứng, phát trực tuyến và đặc biệt là monads.
 
-All the off-chain code (the wallet code), is written in a special monad
-- the Contract Monad.
+Tất cả mã off-chain (mã ví), được viết bằng một đơn nguyên đặc biệt - Đơn nguyên hợp đồng.
 
-Monads are infamous in the Haskell world. It is normally the first
-stumbling block for beginning Haskell coders.
+Các tu viện nổi tiếng trong thế giới Haskell. Đây thường là trở ngại đầu tiên khi bắt đầu lập trình viên Haskell.
 
-There are a lot of tutorials out there that try to explain Monads.
-Monads get compared to burritos, and all sorts of metaphors are employed
-to try to explain the concept. But here, let's at least try to give a
-crash course in monads for those who are new to Haskell.
+Có rất nhiều hướng dẫn cố gắng giải thích các Monads. Monads được so sánh với burritos, và tất cả các loại ẩn dụ được sử dụng để cố gắng giải thích khái niệm. Nhưng ở đây, ít nhất chúng ta hãy cố gắng cung cấp một khóa học cơ bản về monads cho những người mới sử dụng Haskell.
 
-Before we get to general monads, we will start with *IO*, which is how
-IO side-effects are handled in Haskell. But, before we get to Haskell,
-let's look at a mainstream language like Java.
+Trước khi đến với các đơn nguyên chung, chúng ta sẽ bắt đầu với IO , đó là cách xử lý các tác dụng phụ của IO trong Haskell. Tuy nhiên, trước khi đến với Haskell, chúng ta hãy xem xét một ngôn ngữ chính thống như Java.
 
-Let's look at the following Java method.
+Hãy xem xét phương pháp Java sau đây.
 
 .. code:: java
 
@@ -105,7 +65,7 @@ Let's look at the following Java method.
          ...
       }
 
-This function takes no arguments, and it returns an ``int``. Let's imagine it gets called twice in the code.
+Hàm này không có đối số và nó trả về ``int``. Hãy tưởng tượng nó được gọi hai lần trong mã.
 
 .. code:: java
 
@@ -114,100 +74,66 @@ This function takes no arguments, and it returns an ``int``. Let's imagine it ge
       ...
       final int b = foo();
 
-Now, we note that, so long as we don't know what is going on inside the
-foo() function, the return value of the following expression is unknown.
+Bây giờ, chúng ta lưu ý rằng, chừng nào chúng ta không biết điều gì đang xảy ra bên trong hàm foo(), thì giá trị trả về của biểu thức sau là không xác định.
 
 .. code:: java
 
       a == b; // true or false? at compile time, we don't know
 
-We do not know if ``a`` is the same as ``b`` because, in Java, it is
-perfectly possible that some IO happens inside ``foo``. For example,
-there code be code that asks the user to enter input on the console and
-uses this to compute the return value.
+Chúng tôi không biết có ``a`` giống như ``b`` vậy không vì trong Java, hoàn toàn có thể xảy ra một số IO bên trong ``foo``. Ví dụ: có mã là mã yêu cầu người dùng nhập đầu vào trên bảng điều khiển và sử dụng mã này để tính toán giá trị trả về.
 
-This means that, in order to reason about the code, we need to look
-inside ``foo``, which makes testing, for example, more difficult. And it
-means that, it the first call to ``foo`` returns, for example, ``13`` - we
-cannot just replace all other calls to ``foo`` with the known return
-value of ``13``.
+Điều này có nghĩa là, để lập luận về mã, chúng ta cần phải nhìn vào bên trong ``foo``, điều này làm cho việc thử nghiệm trở nên khó khăn hơn. Và nó có nghĩa là, ``foo`` ví dụ , đó là lệnh gọi trả về đầu tiên ``13``- chúng ta không thể thay thế tất cả các lệnh gọi khác đến ``foo`` bằng giá trị trả về đã biết của ``13``.
 
-In Haskell the situation is very different because Haskell is a pure
-functional language. The equivalent signature in Haskell would be
-something like:
+Ở Haskell, tình hình rất khác vì Haskell là một ngôn ngữ chức năng thuần túy. Chữ ký tương đương trong Haskell sẽ giống như sau:
 
 .. code:: haskell
 
       foo :: Int
       foo = ...
 
-Now, if we have a situation where we call ``foo`` twice, even though we
-don't know what the value of ``foo`` is, we know for sure that the two
-return values will be the same.
+Bây giờ, nếu chúng ta gặp trường hợp chúng ta gọi ``foo`` hai lần, mặc dù chúng ta không biết giá trị của ``foo`` là gì, chúng ta biết chắc rằng hai giá trị trả về sẽ giống nhau.
 
-This is a very important feature that is called *referential
-transparency*. There are, in fact, some escape hatches to get around
-this, but we can ignore this.
+Đây là một tính năng rất quan trọng được gọi là tính minh bạch tham chiếu . Trên thực tế, có một số cửa thoát hiểm để giải quyết vấn đề này, nhưng chúng ta có thể bỏ qua điều này.
 
-This makes tasks such as refactoring and testing much easier.
+Điều này làm cho các tác vụ như tái cấu trúc và kiểm tra dễ dàng hơn nhiều.
 
-This is all very well, but you need side-effects in order to have an
-effect on the world. Otherwise, all your program does is heat up the
-processor.
+Điều này là rất tốt, nhưng bạn cần có tác dụng phụ để có ảnh hưởng đến thế giới. Nếu không, tất cả những gì chương trình của bạn làm là làm nóng bộ xử lý.
 
-You need input and output. You must be able to write output to the
-screen, or read input from the keyboard, or a network connection, or a
-file, for example.
+Bạn cần đầu vào và đầu ra. Bạn phải có khả năng ghi kết quả đầu ra ra màn hình, hoặc đọc đầu vào từ bàn phím, kết nối mạng hoặc tệp, chẳng hạn.
 
-There is a famous `video by Simon Peyton-Jones called Haskell Is
-Useless <https://www.youtube.com/watch?v=iSmkqocn0oQ>`__ which explains
-that it is beautiful mathematically to have a pure, side effect-free
-language, but in the end you do need side effects to make anything
-happen.
+Có một `video nổi tiếng của Simon Peyton-Jones là Haskell Is
+Useless <https://www.youtube.com/watch?v=iSmkqocn0oQ>`__ giải thích rằng ngôn ngữ thuần túy, không có tác dụng phụ thì rất đẹp về mặt toán học, nhưng cuối cùng thì bạn cũng cần có tác dụng phụ để biến bất cứ điều gì xảy ra.
 
-And Haskell does have a way to handle side effects and that is the IO
-Monad. But, don't worry about the monad part just yet.
+Và Haskell có một cách để xử lý các tác dụng phụ và đó là Đơn nguyên IO. Tuy nhiên, đừng lo lắng về phần đơn nguyên.
 
-Here is how we do it in Haskell.
+Đây là cách chúng tôi làm điều đó trong Haskell.
 
 .. code:: haskell
 
       foo :: IO Int
       foo = ...
 
-*IO* is a type constructor that takes one argument, like some other
-examples of type constructors such as *Maybe* and *List*. However,
-unlike those examples, *IO* is special, in the sense that you can't
-implement it in the language itself. It is a built-in primitive.
+*IO* là một phương thức khởi tạo kiểu nhận một đối số, giống như một số ví dụ khác về các hàm tạo kiểu như *Maybe* and *List* . Tuy nhiên, không giống như những ví dụ đó, *IO* đặc biệt, theo nghĩa là bạn không thể triển khai nó bằng chính ngôn ngữ. Nó là một nguyên thủy được tích hợp sẵn.
 
-The return value *IO Int* tells us that this is a recipe to compute an
-*Int*, and this recipe can cause side effects. A list of instructions
-telling the computer what to do in order to end up with an *Int*.
+Giá trị trả về *IO Int* cho chúng ta biết rằng đây là một công thức để tính Int và công thức này có thể gây ra các phản ứng phụ. Một danh sách các hướng dẫn cho máy tính biết phải làm gì để kết thúc với một *Int* .
 
-It is important to notice that referential transparency is not broken
-here. The result of the evaluation of *foo* is the recipe itself, not
-the *Int* value. And as the recipe is always the same, referential
-transparency is maintained.
+Điều quan trọng cần lưu ý là tính minh bạch của tham chiếu không bị phá vỡ ở đây. Kết quả đánh giá foo là chính công thức, không phải giá trị *Int* . Và vì công thức luôn giống nhau, nên tính minh bạch của tham chiếu được duy trì.
 
-The only way to actually execute such a recipe in a Haskell program is
-from the main entry point of the program - the *main* function. You can
-also execute *IO* actions in the REPL.
+Cách duy nhất để thực sự thực hiện một công thức như vậy trong chương trình Haskell là từ điểm nhập chính của chương trình - hàm chính . Bạn cũng có thể thực hiện các hành động IO trong REPL.
 
 Hello World
 ~~~~~~~~~~~
 
-Hello World in Haskell looks like this:
+Hello World in Haskell trông như thế này:
 
 .. code:: haskell
 
       main :: IO ()
       main = putStrLn "Hello, world!"
 
-Here, *main* is a recipe that performs some side effects and returns
-Unit - nothing of interest.
+Ở đây, *main* là một công thức thực hiện một số tác dụng phụ và trả về Đơn vị - không có gì đáng quan tâm.
 
-Let's look at *putStrLn* in the REPL. We see that it is an IO action
-that takes a *String* and returns no interesting result.
+Hãy xem *putStrLn* trong REPL. Chúng tôi thấy rằng đó là một hành động IO sử dụng  *String* và không trả về kết quả thú vị nào.
 
 .. code:: haskell
 
@@ -217,25 +143,22 @@ that takes a *String* and returns no interesting result.
       Prelude Week04.Contract> :t putStrLn "Hello, world!"
       putStrLn "Hello, world!" :: IO ()
 
-We can also run this. Open up the app/Main.sh file and edit the *main*
-function so it reads:
+Chúng tôi cũng có thể chạy điều này. Mở ứng dụng / tệp Main.sh và chỉnh sửa chức năng chính để nó đọc:
 
 .. code:: haskell
 
       main :: IO ()
       main = putStrLn "Hello, world!"
 
-Then run
+Sau đó chạy
 
 .. code:: bash
 
       cabal run hello
 
-We will take a quick look at the cabal file now.
+Chúng ta sẽ xem xét nhanh tệp cabal ngay bây giờ.
 
-In previous lectures we only needed the *library* section in the
-*plutus-pioneer-program-week04.cabal* file as we were dealing only with
-library functions. Now, we need to add an *executable* stanza.
+Trong các bài giảng trước, chúng ta chỉ cần phần thư viện *library* trong tệp *plutus-pioneer-program-week04.cabal* vì chúng ta chỉ xử lý các hàm thư viện. Bây giờ, chúng ta cần thêm một khổ thơ có thể thực thi được .
 
 .. code:: cabal
 
@@ -246,12 +169,9 @@ library functions. Now, we need to add an *executable* stanza.
       default-language:    Haskell2010
       ghc-options:         -Wall -O2
 
-This specifies the source directory and which file holds the main
-function. Normally the file name must match the module name, but the
-*main* is an exception.
+Điều này chỉ định thư mục nguồn và tệp nào giữ chức năng chính. Thông thường tên tệp phải khớp với tên mô-đun, nhưng *main* là một ngoại lệ.
 
-Rather than just asking for the type of *putStrLn*, we can run it in the
-REPL. As mentioned, the REPL allows us to execute IO actions.
+Thay vì chỉ yêu cầu loại *putStrLn* , chúng ta có thể chạy nó trong REPL. Như đã đề cập, REPL cho phép chúng ta thực hiện các hành động IO.
 
 .. code:: haskell
 
@@ -261,42 +181,33 @@ REPL. As mentioned, the REPL allows us to execute IO actions.
 getLine
 ~~~~~~~
 
-Let's look at *getLine*
+Hãy xem *getLine*
 
 .. code:: haskell
 
       Prelude Week04.Contract> :t getLine
       getLine :: IO String
 
-This shows that it is a recipe, possibly producing side-effects, that,
-when executed will produce a *String*. In the case of *getLine*, the
-side-effect in question is that it will wait for user input from the
-keyboard.
+Điều này cho thấy rằng đó là một công thức, có thể tạo ra các hiệu ứng phụ, khi được thực thi sẽ tạo ra một Chuỗi . Trong trường hợp getLine , tác dụng phụ được đề cập là nó sẽ đợi người dùng nhập từ bàn phím.
 
-If we execute *getLine* in the REPL.
+Nếu chúng ta thực thi getLine trong REPL.
 
 .. code:: haskell
 
       Prelude Week04.Contract> getLine
 
-It waits for keyboard input. Then, if we enter something, it returns the
-result.
+Nó chờ nhập bàn phím. Sau đó, nếu chúng ta nhập một cái gì đó, nó sẽ trả về kết quả.
 
 .. code:: haskell
 
       Haskell
       "Haskell"
 
-There are a variety of IO actions defined in Haskell to do all sorts of
-things like reading files, writing files, reading from and writing to
-sockets.
+Có một loạt các hành động IO được định nghĩa trong Haskell để thực hiện tất cả các loại như đọc tệp, ghi tệp, đọc từ và ghi vào ổ cắm.
 
-But no matter how many predefined actions you have, that will never be
-enough to achieve something complex, so there must be a way to combine
-these primitive, provided IO actions into bigger, more complex recipes.
+Nhưng cho dù bạn có bao nhiêu hành động được xác định trước, điều đó sẽ không bao giờ là đủ để đạt được điều gì đó phức tạp, vì vậy cần phải có cách để kết hợp các hành động IO nguyên thủy này thành những công thức lớn hơn, phức tạp hơn.
 
-One thing we can do is make use of the *Functor* type instance of IO.
-Let's look at the type instances of *IO* in the REPL.
+Một điều chúng ta có thể làm là sử dụng phiên bản kiểu *Functor* của IO. Hãy xem xét các trường hợp loại của *IO*  trong REPL.
 
 .. code:: haskell
 
@@ -316,9 +227,7 @@ Let's look at the type instances of *IO* in the REPL.
       instance Semigroup a => Semigroup (IO a) -- Defined in ‘GHC.Base’
       instance MonadFail IO -- Defined in ‘Control.Monad.Fail’
 
-We see the dreaded *Monad* instance, but we also see a *Functor*
-instance. *Functor* is a very important type class in Haskell. If we
-look at it in the REPL:
+Chúng ta thấy cá thể *Monad*  đáng sợ , nhưng chúng ta cũng thấy một cá thể *Functor*. *Functor* là một loại lớp rất quan trọng trong Haskell. Nếu chúng ta nhìn vào nó trong REPL:
 
 .. code:: haskell
 
@@ -338,19 +247,15 @@ look at it in the REPL:
       instance Functor ((,,) a b) -- Defined in ‘GHC.Base’
       instance Functor ((,) a) -- Defined in ‘GHC.Base’
 
-The important method here is *fmap*. The second function *(<$)* is a
-convenience function.
+Phương pháp quan trọng ở đây là fmap . Hàm thứ hai (<$) là một hàm tiện lợi.
 
 .. code:: haskell
 
       fmap :: (a -> b) -> f a -> f b
 
-This function, *fmap*, that all *Functor*\ s have tells us that, if we
-give it has access to a function that can turn an *a* into a *b*, then
-it can turn an *f a* into an *f b* for us. Here, we are interested in
-the case where *f* is *IO*.
+Hàm này  *fmap* , mà tất cả *Functor*\ s có cho chúng ta biết rằng, nếu chúng ta cấp cho nó quyền truy cập vào một hàm có thể biến *a* thàng *b* , thì nó có thể biến fa thành fb cho chúng ta. Ở đây, chúng ta quan tâm đến trường hợp f là IO .
 
-If we specialized the function for *IO*, we would have a function like:
+Nếu chúng ta chuyên biệt hóa hàm cho *IO* , chúng ta sẽ có một hàm như:
 
 .. code:: haskell
 
