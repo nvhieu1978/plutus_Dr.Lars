@@ -58,7 +58,7 @@ Tôi cũng sử dụng điều này để thêm nhận xét vào mã.
 
 - [Bài giảng số 9](https://youtu.be/-RpCqHuxfQQ)
 
-  - Tổng quan về Marlowe.
+  - Tổng quan về Marlowe.  [Site](https://github.com/input-output-hk/plutus-pioneer-program/blob/main/Marlowe_Plutus_Pioneers_June_2021.pdf)
   - Marlowe trong Plutus.
   - Giới thiệu Marlowe Playground.
 
