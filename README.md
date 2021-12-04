@@ -7,7 +7,8 @@ Tôi cũng sử dụng điều này để thêm nhận xét vào mã.
 
 ## Bài giảng
 
-- [Bài giảng số 1](https://youtu.be/CJD8ctJqDw0)
+- [Video Bài giảng số 1](https://youtu.be/CJD8ctJqDw0)
+- [Html Bài giảng số 1](docs/week1.rst)
 
   - Welcome
   - (E)UTxO-model
