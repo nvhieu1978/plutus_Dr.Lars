@@ -261,12 +261,10 @@ Nếu chúng ta chuyên biệt hóa hàm cho *IO* , chúng ta sẽ có một hà
 
       fmap' :: (a -> b) -> IO a -> IO b
 
-How does that work. Well, *IO a* is a recipe that has side effects and
-produces an *a*. So, how do we get a *b* out of that? We perform the
-recipe, but, before return the *a*, we apply the *(a -> b)* function to
-to *a* and return the result, which is the *b*.
+Làm thế nào để làm việc đó. À, *IO a* là một công thức có tác dụng phụ và tạo ra *a* . Vì vậy, làm thế nào để chúng ta có được một *b* trong số đó? Chúng tôi thực hiện công thức, nhưng, trước khi trả về a , chúng tôi áp dụng hàm *(a -> b)*  cho *a* và trả về kết quả là *b* .
 
-In the REPL, let's look at the *toUpper* function.
+Trong REPL, chúng ta hãy xem xét hàm *toUpper* .
+
 
 .. code:: haskell
 
@@ -276,31 +274,28 @@ In the REPL, let's look at the *toUpper* function.
       Prelude Data.Char Week04.Contract> toUpper 'q'
       'Q'
 
-If we want to apply that to a *String* rather than a *Char* we can use
-the *map* function. *String*\ s in Haskell are just lists of *Char*\ s.
+Nếu chúng ta muốn áp dụng được cho một chuỗi chứ không phải là một Char chúng ta có thể sử dụng bản đồ chức năng. Các chuỗi *String*\ s trong Haskell chỉ là  *Char*\ s .
 
 .. code:: haskell
 
       Prelude Data.Char Week04.Contract> map toUpper "Haskell"
       "HASKELL"
 
-The *map toUpper* function is a function from *String* to *String*.
+Hàm *map toUpper*  là một hàm chuyển từ *String* to *String*.
 
 .. code:: haskell
 
       Prelude Data.Char Week04.Contract> :t map toUpper
       map toUpper :: [Char] -> [Char]
 
-And we can use this in combination with *fmap*. If we use *map toUpper*
-as our function to convert an *a* to a *b*, we can see what the type of
-output of *fmap* would be when applied to an *IO a*.
+Và chúng ta có thể sử dụng kết hợp với *fmap*. Nếu chúng ta sử dụng *map toUpper* làm chức năng chuyển đổi *a* thành *b* , chúng ta có thể thấy loại đầu ra của fmap sẽ như thế nào khi áp dụng cho *IO a* .
 
 .. code:: haskell
 
       Prelude Data.Char Week04.Contract> :t fmap (map toUpper) getLine
       fmap (map toUpper) getLine :: IO [Char]
 
-Let's see it in action.
+Hãy xem nó trong hành động.
 
 .. code:: haskell
 
@@ -308,9 +303,7 @@ Let's see it in action.
       haskell
       "HASKELL"
 
-We can also use the *>>* operator. This chains two *IO* actions
-together, ignoring the result of the first. In the following example,
-both actions will be performed in sequence.
+Chúng ta cũng có thể sử dụng toán tử *>>* . Điều này chuỗi hai hành động *IO* lại với nhau, bỏ qua kết quả của hành động đầu tiên. Trong ví dụ sau, cả hai hành động sẽ được thực hiện theo trình tự.
 
 .. code:: haskell
 
