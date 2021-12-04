@@ -15,41 +15,48 @@ Tôi cũng sử dụng điều này để thêm nhận xét vào mã.
   - Chạy một hợp đồng đấu giá mẫu trên một Playground
   - Bài tập về nhà
 
-- [Bài giảng số 2](https://youtu.be/7nDGZkUIeUQ)
+- [Video Bài giảng số 2](https://youtu.be/7nDGZkUIeUQ)
+- [Html Bài giảng số 2](docs/week2.rst)
 
   - Kích hoạt sự thay đổi.
   - Low-level, Các tập lệnh xác thực on-chain chưa được định kiểu.
   - High-level, Các tập lệnh xác thực on-chain định kiểu.
 
-- [Bài giảng số 3](https://youtu.be/WG3uw-TkW2k)
+- [Video Bài giảng số 3](https://youtu.be/WG3uw-TkW2k)
+- [Html Bài giảng số 3](docs/week3.rst)
 
   - Kịch bản context.
   - Xử lý thời gian (Time handling).
   - Hợp đồng được tham số hóa (Parameterized contracts).
 
-- [Bài giảng số 4](https://youtu.be/6Reuh0xZDjY)
+- [Video Bài giảng số 4](https://youtu.be/6Reuh0xZDjY)
+- [Html Bài giảng số 4](docs/week4.rst)
 
   - Monads
   - Đơn nguyên `EmulatorTrace`.
   - Đơn nguyên `Contract`.
 
-- [Bài giảng số 5](https://youtu.be/6VbhY162GQA)
+- [Video Bài giảng số 5](https://youtu.be/6VbhY162GQA)
+- [Html Bài giảng số 5](docs/week5.rst)
 
   - Values.
   - Mã thông báo gốc và chính sách đúc tiền
   - NFT's.
 
-- [Bài giảng số 6](https://youtu.be/wY7R-PJn66g)
+- [Video Bài giảng số 6](https://youtu.be/wY7R-PJn66g)
+- [Html Bài giảng số 6](docs/week6.rst)
 
   - Oracles.
   - Sử dụng PAB.
 
-- [Bài giảng số 7](https://youtu.be/oJupInqvJUI)
+- [Video Bài giảng số 7](https://youtu.be/oJupInqvJUI)
+- [Html Bài giảng số 7](docs/week7.rst)
 
   - Commit schemes.
   - Máy trạng thái (State machines).
 
-- [Bài giảng số 8](https://youtu.be/JMRwkMgaBOg)
+- [Video Bài giảng số 8](https://youtu.be/JMRwkMgaBOg)
+- [Html Bài giảng số 8](docs/week8.rst)
 
   - Ví dụ khác về state machine: token sale.
   - Kiểm tra tự động sử dụng dấu vết giả lập (emulator traces).
@@ -57,13 +64,15 @@ Tôi cũng sử dụng điều này để thêm nhận xét vào mã.
   - Kiểm tra tài sản với `QuickCheck`.
   - Thử nghiệm hợp đồng Plutus với thử nghiệm dựa trên tài sản.
 
-- [Bài giảng số 9](https://youtu.be/-RpCqHuxfQQ)
+- [Video Bài giảng số 9](https://youtu.be/-RpCqHuxfQQ)
+- [Html Bài giảng số 9](docs/week9.rst)
 
   - Tổng quan về Marlowe.  [Site](https://github.com/input-output-hk/plutus-pioneer-program/blob/main/Marlowe_Plutus_Pioneers_June_2021.pdf)
   - Marlowe trong Plutus.
   - Giới thiệu Marlowe Playground.
 
-- [Bài giảng số 10](https://youtu.be/Dg36h9YPMz4)
+- [Video Bài giảng số 10](https://youtu.be/Dg36h9YPMz4)
+- [Html Bài giảng số 10](docs/week10.rst)
 
   - Giới thiệu Uniswap.
   - Triển khai Uniswap trong Plutus.
