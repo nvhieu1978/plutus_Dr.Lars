@@ -1,0 +1,948 @@
+<h1 id="week-02-validation">Week 02 - Validation</h1>
+<p>::: {.note}
+::: {.title}
+Note
+:::</p>
+<p>Đây là tài liệu <a href="https://youtu.be/7nDGZkUIeUQ">Bài giảng #2, Dr. Lars</a>.</p>
+<p>Nó bao gồm mức thấp và mức cao tập lệnh xác thực on-chain.</p>
+<blockquote>
+<p>Mã trong bài giảng này sử dụng cam kết Plutus
+81ba78edb1d634a13371397d8c8b19829345ce0d
+:::</p>
+</blockquote>
+<p>Trước khi bắt đầu ---------------</p>
+<p>Hãy nói về một điểm quan trọng được đưa ra bởi một trong những người
+tiên phong sau bài giảng số 1.</p>
+<p>Bạn sẽ gọi lại trong ví dụ đấu giá, chúng tôi tạo ra ba endpoints -
+<code>start</code>, <code>bid</code> và <code>close</code>. <code>close</code> có hai kịch bản. Nếu có giá thầu đủ
+cao, mã thông báo sẽ được chuyển đến người đặt giá thầu cao nhất. Nếu
+không có giá thầu đủ cao, mã thông báo sẽ quay trở lại người bán.</p>
+<p>Điều gì sẽ xảy ra nếu <code>endpoint close</code> không có ở đó? Tiền có thể bị
+khóa mãi mãi trong hợp đồng không?</p>
+<p>Đây là một điểm thực sự quan trọng, bởi vì những gì bạn phải nhận ra là
+UTxO trên blockchain chỉ là dữ liệu, chúng hoàn toàn thụ động. Để bất cứ
+điều gì xảy ra phải có một giao dịch. Để đạt được tiến bộ và thay đổi
+trạng thái của blockchain, phải có một giao dịch mới được gửi sử dụng
+các UTxO khác nhau và tạo ra các UTxO mới.</p>
+<p>Chỉ có các giao dịch mới thay đổi trạng thái. UTxO sẽ không bao giờ tự
+hoạt động và thực hiện điều gì đó. Bạn không thể có một hợp đồng thông
+minh nằm trên blockchain và vào một thời điểm nào đó, đột nhiên thực
+hiện một hành động.</p>
+<p>Vì vậy, chúng tôi thực sự cần <code>endpoint close</code> nếu chúng tôi muốn cuộc
+đấu giá được giải quyết. Trong trường hợp của chúng tôi, điểm cuối được
+kích hoạt theo cách thủ công. Bạn có thể viết một hợp đồng chạy trong ví
+sẽ tự động tạo closegiao dịch - có thể viết mã ngoài chuỗi khá phức tạp.</p>
+<p>Tuy nhiên, theo quan điểm của blockchain, nó luôn là một yếu tố kích
+hoạt bên ngoài thực hiện điều gì đó. Không có gì xảy ra nếu nó không
+được kích hoạt từ bên ngoài.</p>
+<p>Vì vậy, nếu không có <code>endpoint close</code> , hoặc <code>endpoint close</code> không bao
+giờ được kích hoạt, thì tiền sẽ vẫn nằm ở địa chỉ tập lệnh mãi mãi.</p>
+<h2 id="gi-i-thi-u">Giới thiệu</h2>
+<p>Trong bài giảng đầu tiên, chúng ta đã thấy rằng hợp đồng thông minh có
+hai mặt - một phần trong chuỗi và một phần ngoài chuỗi.</p>
+<p>Phần on-chain là về xác nhận. Nó cho phép các nút xác thực một giao dịch
+nhất định và liệu nó có được phép sử dụng một UTxO nhất định hay không.</p>
+<p>Phần off-chain nằm trong ví của người dùng. Nó xây dựng và gửi các giao
+dịch phù hợp.</p>
+<p>Cả hai đều là chủ đề quan trọng. Chúng tôi phải thành thạo cả hai để
+viết hợp đồng thông minh, nhưng hiện tại chúng tôi sẽ tập trung vào phần
+on-chain.</p>
+<p>Hãy nhớ lại mô hình UTxO mở rộng mà ý tưởng là chúng tôi giới thiệu một
+loại địa chỉ mới.</p>
+<p><img src="img/1.png" alt=""></p>
+<p>Trong mô hình UTxO đơn giản, cái gọi là địa chỉ khóa công khai, trong đó
+địa chỉ được cung cấp bởi hàm băm của khóa công khai. Nếu một UTxO nằm ở
+địa chỉ khóa công khai như vậy, thì một giao dịch có thể sử dụng UTxO đó
+làm đầu vào nếu chữ ký thuộc khóa công khai đó được bao gồm trong giao
+dịch.</p>
+<p>Những gì mô hình (E) UTxO làm là mở rộng điều này bằng cách thêm các địa
+chỉ tập lệnh có thể chạy logic tùy ý.</p>
+<p>Khi một giao dịch muốn sử dụng UTxO ở một địa chỉ tập lệnh được xác thực
+bởi một nút, thì nút đó sẽ chạy tập lệnh và sau đó, tùy thuộc vào kết
+quả của tập lệnh, quyết định xem giao dịch có hợp lệ hay không.</p>
+<p>Và nhớ lại rằng hai là ba bổ sung nữa:</p>
+<p>Thay vì chỉ có chữ ký trên các giao dịch, chúng tôi có cái gọi là Người
+nhận thừa - các phần dữ liệu tùy ý. Ở phía đầu ra UTxO, chúng tôi có một
+phần dữ liệu tùy ý bổ sung được gọi là Datum, bạn có thể coi đây là một
+phần nhỏ của trạng thái nằm trên UTxO. Cuối cùng, chúng ta có bối cảnh.
+Có nhiều lựa chọn khác nhau về bối cảnh này có thể là gì. Nó có thể rất
+hạn chế, chỉ bao gồm Chúa cứu thế (như trong Bitcoin) hoặc rất toàn cầu,
+bao gồm toàn bộ trạng thái của blockchain (như trong Ethereum). Trong
+Cardano, đó là giao dịch đang được xác thực, bao gồm tất cả các đầu vào
+và đầu ra của nó.</p>
+<p>Vì vậy, có ba phần dữ liệu mà một tập lệnh Plutus nhận được. Datum, đặt
+tại UTxO, người mua lại, đến từ đầu vào và xác thực, và ngữ cảnh, bao
+gồm giao dịch đang được xác thực và các đầu vào và đầu ra của nó.</p>
+<p>Trong một triển khai cụ thể như Plutus, những phần thông tin này cần
+được biểu diễn bằng một kiểu dữ liệu cụ thể - kiểu dữ liệu Haskell. Khi
+nó xảy ra, lựa chọn đã được thực hiện để sử dụng cùng một kiểu dữ liệu
+cho cả ba người trong số họ. Ít nhất là ở mức độ thực hiện thấp.</p>
+<p>Chúng ta sẽ xem xét điều đó đầu tiên, nhưng trong cuộc sống thực không
+ai thực sự sử dụng phương pháp tiếp cận cấp thấp này. Có nhiều cách
+thuận tiện hơn để sử dụng các kiểu dữ liệu phù hợp hơn cho những việc
+này, và chúng ta sẽ đề cập đến vấn đề đó ở phần sau của bài giảng này.</p>
+<h2 id="plutustx-data">PlutusTx.Data</h2>
+<p>Như đề cập, the datum, redeemer and context chia sẻ một kiểu dữ liệu.</p>
+<p>Kiểu dữ liệu đó được đống gói trong <code>plutus-core</code>, trong mô-đul
+<code>PlutusCore.Data</code>.</p>
+<p>Nó đực gọi đơn giản là <code>Data</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">data</span> <span class="hljs-keyword">Data</span> =
+     Constr <span class="hljs-keyword">Integer</span> [<span class="hljs-keyword">Data</span>]
+   | Map [(<span class="hljs-keyword">Data</span>, <span class="hljs-keyword">Data</span>)]
+   | List [<span class="hljs-keyword">Data</span>]
+   | I <span class="hljs-keyword">Integer</span>
+   | B BS.ByteString
+   deriving stock (Show, Eq, Ord, <span class="hljs-keyword">Generic</span>)
+   deriving anyclass (NFData)
+</code></pre>
+<p>Nó có 5 hàm tạo.</p>
+<ul>
+<li><code>Constr</code> lấy một Số nguyên và, một cách đệ quy, một danh sách <code>Data</code></li>
+<li><code>Map</code> lấy một danh sách các cặp <em>Data</em>. Bạn có thể coi đây là một
+bảng tra cứu các cặp khóa-giá trị trong đó cả khóa và giá trị đều
+thuộc loại <code>Data</code></li>
+<li><code>List</code> lấy một danh sách <code>Data</code></li>
+<li><code>I</code> lấy một số nguyên duy nhất</li>
+<li><code>B</code> lấy một chuỗi Byte</li>
+</ul>
+<p>Đối với những người quen thuộc với định dạng JSON, điều này rất giống.
+Các hàm tạo không hoàn toàn giống nhau, nhưng giống như JSON, bạn có thể
+biểu diễn số, chuỗi, danh sách dữ liệu và các cặp khóa-giá trị. Nó có
+thể đại diện cho dữ liệu tùy ý, điều này làm cho nó rất phù hợp với mục
+đích của chúng tôi.</p>
+<p>Chúng ta cũng có thể khám phá loại này trong REPL.</p>
+<p>Chạy phần sau từ kho lưu trữ chương trình tiên phong của plutus. Bạn có
+thể cần khởi động nix-shell từ kho lưu trữ Plutus trước khi thay đổi vào
+thư mục <code>week02</code>.</p>
+<pre><code><span class="hljs-symbol">cd</span> <span class="hljs-meta">code</span>/week02
+<span class="hljs-symbol">cabal</span> repl
+</code></pre><p>Từ REPL, chúng ta cần import <code>PlutusTx</code> để chúng có quyền truy cập
+vào<code>Data</code> . <code>Data</code> không được định nghĩa trong <code>PlutusTx</code>, nhưng nó được
+tái xuất từ đó.</p>
+<pre><code><span class="hljs-keyword">import</span> PlutusTx
+</code></pre><p>chúng ta có thể thấy thông tin về <code>Data</code>.</p>
+<pre><code>:<span class="hljs-selector-tag">i</span> Data
+</code></pre><p>Điều này chung ta có thể nhận được một số thông tin về <em>Data</em>.</p>
+<pre><code class="lang-{.haskell}">Prelude Week02.Burn&gt; import PlutusTx
+Prelude PlutusTx Week02.Burn&gt;<span class="hljs-keyword"> :i</span> Data
+type Data<span class="hljs-keyword"> :</span>: *
+data Data
+  = Constr Integer [Data]
+  | Map [(Data, Data)]
+  | List [Data]
+  | I Integer
+  | B bytestring-0.10.12.0:Data.ByteString.Internal.ByteString
+        -- Defined in ‘plutus-core-0.1.0.0:PlutusCore.Data’<span class="hljs-built_in">
+instance </span>Eq Data
+  -- Defined in ‘plutus-core-0.1.0.0:PlutusCore.Data’<span class="hljs-built_in">
+instance </span>Ord Data
+  -- Defined in ‘plutus-core-0.1.0.0:PlutusCore.Data’<span class="hljs-built_in">
+instance </span>Show Data
+  -- Defined in ‘plutus-core-0.1.0.0:PlutusCore.Data’<span class="hljs-built_in">
+instance </span>IsData Data -- Defined in ‘PlutusTx.IsData.Class’
+</code></pre>
+<p>Bây giờ chúng ta có thể chơi với nó. Chúng ta có thể sử dụng hàm <code>I</code> tạo
+để tạo một giá trị của kiểu <code>Data</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-symbol">Prelude</span> PlutusTx<span class="hljs-meta">.Data</span> Week02.<span class="hljs-keyword">Burn&gt; </span>I <span class="hljs-number">42</span>
+I <span class="hljs-number">42</span>
+</code></pre>
+<p>Chúng ta có thể hỏi loại của nó và xác nhận rằng nó thực sự thuộc loại
+<code>Data</code>:</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-symbol">Prelude</span> PlutusTx<span class="hljs-meta">.Data</span> Week02.<span class="hljs-keyword">Burn&gt; </span>:t I <span class="hljs-number">42</span>
+I <span class="hljs-number">42</span> :: <span class="hljs-meta">Data</span>
+</code></pre>
+<p>TCách dễ nhất để tạo một giá trị kiểu <code>Data</code> bằng cách sử dụng hàm <code>B</code>
+tạo là sử dụng Phần mở rộng GHC <code>OverloadedStrings</code>. Điều này cho phép
+các chuỗi ký tự được sử dụng thay cho các kiểu dữ liệu giống chuỗi và
+trình biên dịch sẽ diễn giải chúng như kiểu dự định của chúng.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-symbol">Prelude</span> PlutusTx<span class="hljs-meta">.Data</span> Week02.<span class="hljs-keyword">Burn&gt; </span>:set -XOverloadedStrings
+<span class="hljs-symbol">Prelude</span> PlutusTx<span class="hljs-meta">.Data</span> Week02.<span class="hljs-keyword">Burn&gt; </span>:t <span class="hljs-keyword">B </span><span class="hljs-string">"Haskell"</span>
+<span class="hljs-keyword">B </span><span class="hljs-string">"Haskell"</span> :: <span class="hljs-meta">Data</span>
+</code></pre>
+<p>Chúng ta cũng có thể sử dụng các hàm tạo phức tạp hơn, như <code>Map</code> and
+<code>List</code>:</p>
+<pre><code class="lang-{.haskell}">Prelude PlutusTx.Data Week02.Burn&gt; :t <span class="hljs-keyword">Map</span> [(<span class="hljs-keyword">I</span> <span class="hljs-number">42</span>, B <span class="hljs-string">"Haskell"</span>), (<span class="hljs-keyword">List</span> [<span class="hljs-keyword">I</span> <span class="hljs-number">0</span>], <span class="hljs-keyword">I</span> <span class="hljs-number">1000</span>)]
+<span class="hljs-keyword">Map</span> [(<span class="hljs-keyword">I</span> <span class="hljs-number">42</span>, B <span class="hljs-string">"Haskell"</span>), (<span class="hljs-keyword">List</span> [<span class="hljs-keyword">I</span> <span class="hljs-number">0</span>], <span class="hljs-keyword">I</span> <span class="hljs-number">1000</span>)] :: Data
+</code></pre>
+<h2 id="plutus-validator">Plutus Validator</h2>
+<p>Bây giờ chúng tôi đã sẵn sàng triển khai trình xác thực đầu tiên của
+mình..</p>
+<h3 id="v-d-1-h-p-ng-gift">Ví dụ 1 - Hợp đồng Gift</h3>
+<h4 id="the-code">The Code</h4>
+<p>Chúng tôi bắt đầu tập lệnh bằng cách sao chép, dán danh sách các phần mở
+rộng ngôn ngữ GHC, cộng với một số phần nhập phụ thuộc từ ví dụ mà chúng
+tôi đã sử dụng trong bài giảng trước.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-meta">{-# LANGUAGE DataKinds           #-}</span>
+<span class="hljs-meta">{-# LANGUAGE FlexibleContexts    #-}</span>
+...
+
+<span class="hljs-keyword">module</span> Week02.Gift <span class="hljs-keyword">where</span>
+
+<span class="hljs-keyword">import</span>           Control.Monad       <span class="hljs-keyword">hiding</span> (<span class="hljs-title">fmap</span>)
+<span class="hljs-keyword">import</span>           Data.Map            <span class="hljs-keyword">as</span> Map
+...
+<span class="hljs-keyword">import</span>           Text.Printf         (<span class="hljs-title">printf</span>)
+</code></pre>
+<p>Sau đó, chúng tôi viết trình xác nhận. Cuối cùng, trình xác thực sẽ là
+một tập lệnh, sống trên blockchain trong Plutus Core, là một ngôn ngữ
+cấp thấp hơn dựa trên phép tính lambda. Nhưng, chúng ta không cần phải
+viết Plutus Core. Chúng ta có thể viết Haskell và sau này chúng ta sẽ
+xem cách chúng ta chuyển đổi Haskell đó thành tập lệnh Plutus Core.</p>
+<p>Vì vậy, chúng tôi viết một hàm Haskell đại diện cho trình xác thực của
+chúng tôi. Như chúng ta đã biết, trình xác thực là một tập lệnh có ba
+phần đầu vào - dữ liệu, trình đổi và ngữ cảnh, tương ứng, ở cấp thấp
+nhất được biểu thị bằng <code>Data</code> kiểu dữ liệu.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-function"><span class="hljs-title">mkValidator</span> :: Data -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> ()
+</code></pre>
+<p>Hơi ngạc nhiên, kết quả của hàm là <code>()</code>. Trong Haskell <code>Unit</code> kiểu,
+tương tự như <code>void</code> trong một số ngôn ngữ khác, như C hoặc C # hoặc
+Java - đó là kiểu không mang thông tin.</p>
+<p><code>Unit</code> là một kiểu tích hợp sẵn trong Haskell và nó chỉ có một giá trị,
+được viết theo cùng một cách với chính kiểu đó, như chúng ta có thể thấy
+từ REPL.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Gift</span>&gt; ()
+()
+<span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Gift</span>&gt; <span class="hljs-selector-pseudo">:t</span> ()
+() :: ()
+</code></pre>
+<p>Một hàm có kiểu trả về <code>()</code> là khá bất thường trong Haskell. Trong các
+ngôn ngữ chính thống hơn, việc các hàm hoặc thủ tục không trả về giá trị
+là điều khá phổ biến. Trong những tình huống này, các hàm chỉ quan trọng
+đối với các tác dụng phụ của chúng, chẳng hạn như hàm Java in nội dung
+nào đó ra bảng điều khiển.</p>
+<p>Nhưng Haskell là một ngôn ngữ thuần túy. Nếu bạn muốn có tác dụng phụ,
+điều này sẽ được hiển thị bởi hệ thống loại. Ví dụ: nếu mkValidator thực
+hiện bất kỳ IO nào, nó sẽ có chữ ký kiểu:</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-function"><span class="hljs-title">mkValidator</span> :: Data -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> IO ()
+</code></pre>
+<p>Điều này sẽ chỉ ra một hàm thực hiện các tác dụng phụ IO nhưng không có
+giá trị trả về thú vị.</p>
+<p>Nhưng, như chúng ta biết rằng <code>mkValidator</code> hàm thực không thực hiện tác
+dụng phụ và không trả về giá trị nào, thực sự không có gì hữu ích mà nó
+có thể làm được.</p>
+<p>Tuy nhiên, có điều gì đó mà hàm có thể làm cũng như trả về <code>()</code>, cụ thể
+là nó có thể ném ra một ngoại lệ hoặc có lỗi. Và đó là những gì Plutus
+sử dụng.</p>
+<p>Ý tưởng là nếu <code>mkValidatorhàm</code> không gặp lỗi hoặc đưa ra một ngoại lệ,
+thì quá trình xác nhận sẽ thành công. Nếu nó xuất hiện một lỗi thì việc
+xác thực không thành công và giao dịch bị từ chối.</p>
+<p>Hãy viết trình xác nhận đơn giản nhất mà chúng ta có thể.</p>
+<pre><code class="lang-{.haskell}">mkValidator :: Data -&gt; Data -&gt; Data -&gt; ()
+mkValidator <span class="hljs-keyword">_</span> <span class="hljs-keyword">_</span> <span class="hljs-keyword">_</span> = ()
+</code></pre>
+<p>Đối số đầu tiên là dữ liệu, đối số thứ hai là trình chuộc và đối số thứ
+ba là ngữ cảnh. Điều đơn giản nhất mà chúng ta có thể làm là hoàn toàn
+bỏ qua cả ba đối số và quay trở lại ngay lập tức <code>()</code>.</p>
+<p>Điều này có nghĩa là địa chỉ tập lệnh tương ứng với trình xác thực này
+không quan tâm đến dữ liệu, nó không quan tâm đến trình đổi và không
+quan tâm đến ngữ cảnh. Nó sẽ luôn thành công và điều này có nghĩa là bất
+kỳ giao dịch nào cũng có thể sử dụng tập lệnh tại địa chỉ này làm đầu
+vào. Không quan trọng dữ liệu nào tồn tại cho UTxO tại địa chỉ tập lệnh
+này, không quan trọng công cụ đổi quà nào được sử dụng cho giao dịch và
+giao dịch có cấu trúc nào không quan trọng.</p>
+<p>Nếu bạn gửi bất kỳ khoản tiền nào đến địa chỉ tập lệnh này, bất kỳ ai
+cũng có thể nhận ngay.</p>
+<p>Hàm này chưa phải là mã Plutus, nó chỉ là một hàm Haskell. Để biến nó
+thành một tập lệnh Plutus, chúng ta cần phải biên dịch nó.</p>
+<p>Kết quả của quá trình biên dịch của chúng tôi sang Plutus sẽ thuộc loại
+<code>Validator</code>. Bên dưới hàm trong <code>Gift.hs</code>, chúng tôi thêm đoạn mã sau.</p>
+<pre><code class="lang-{.haskell}">validator <span class="hljs-symbol">:</span>: Validator
+validator = mkValidatorScript $$(PlutusTx.compile [<span class="hljs-params">||</span> mkValidator <span class="hljs-params">||</span>])
+</code></pre>
+<p>Các chức năng <code>mkValidatorScript</code> mang kiểu
+<code>CompiledCode (Data -&gt; Data -&gt; Data -&gt; ()) -&gt; Validator</code>. Nhằm mục đích
+tạo kiểu này và biên dịch tập lệnh <code>mkValidator</code> bằng cách sử dụng một
+thứ gọi là Template Haskell.</p>
+<p>Template Haskell là một tính năng nâng cao của Haskell giải quyết một
+vấn đề tương tự như các hệ thống macro trong các ngôn ngữ khác. Macro là
+thứ được mở rộng tại thời điểm biên dịch.</p>
+<p>Vì vậy, với mã này</p>
+<pre><code class="lang-{.haskell}">$$(PlutusTx.compile [<span class="hljs-params">||</span> mkValidator <span class="hljs-params">||</span>])
+</code></pre>
+<p>Chúng tôi đang yêu cầu trình biên dịch viết mã cho hàm <code>validator</code> tại
+thời điểm biên dịch dựa trên <code>mkValidatorhàm</code> của chúng ta , và sau đó
+tiến hành biên dịch bình thường.</p>
+<p>Bạn không cần phải hiểu nhiều về Template Haskell để viết Plutus vì nó
+luôn luôn giống nhau. Khi bạn đã xem một vài ví dụ, bạn có thể ít nhiều
+chỉ cần sao chép và dán.</p>
+<p>Mẫu Haskell hy vọng tất cả mã sẽ có sẵn trong Oxford Brackets - <code>[| |]</code>.</p>
+<p>Với các trình xác thực phức tạp hơn, bạn có thể sẽ dựa vào nhiều hàm trợ
+giúp và bạn không muốn phải thêm chúng vào trong Dấu ngoặc đơn Oxford.
+Để tránh điều này, có một điều chúng ta cần làm đối với <code>mkValidator</code>
+hàm và đó là làm cho nó có thể nhập được bằng cách thêm thông số
+<code>INLINABLE</code>.</p>
+<pre><code class="lang-{.haskell}">{-# INLINABLE mkValidator #-}
+mkValidator :: Data -&gt; Data -&gt; Data -&gt; ()
+mkValidator _ _ _ = ()
+</code></pre>
+<p>Bạn sẽ thấy điều này thường xuyên trong các tập lệnh Plutus và nó thường
+là một dấu hiệu cho thấy một hàm được sử dụng trong một tập lệnh xác
+thực. Tất cả các chức năng mà trình xác nhận phụ thuộc phải có thể nhập
+được.</p>
+<p>Hãy quay lại REPL và xem xét trình xác nhận.</p>
+<pre><code class="lang-{.haskell}">:l src/Week02/Gift<span class="hljs-selector-class">.hs</span>
+Ok, one module loaded.
+Prelude PlutusTx Week02.Gift&gt; import Ledger<span class="hljs-selector-class">.Scripts</span>
+Prelude PlutusTx Ledger<span class="hljs-selector-class">.Scripts</span> Week02.Gift&gt; validator
+Validator { &lt;script&gt; }
+</code></pre>
+<p>Chúng tôi có thể yêu cầu thông tin về <code>Validator</code>.</p>
+<pre><code class="lang-{.haskell}">Prelude PlutusTx Ledger.Scripts Week02.Gift&gt;<span class="hljs-keyword"> :i</span> Validator
+type Validator<span class="hljs-keyword"> :</span>: *
+newtype Validator = Validator {getValidator<span class="hljs-keyword"> :</span>: Script}
+        -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’<span class="hljs-built_in">
+instance </span>Eq Validator
+  -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’<span class="hljs-built_in">
+instance </span>Ord Validator
+  -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’<span class="hljs-built_in">
+instance </span>Show Validator
+  -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’
+</code></pre>
+<p>Chúng ta thấy rằng nó là một lớp bao bọc xung quanh <code>getValidator</code></p>
+<pre><code class="lang-{.haskell}">Prelude PlutusTx Ledger.Scripts Week02.Gift&gt; getValidator validator
+<span class="hljs-tag">&lt;<span class="hljs-name">Script</span>&gt;</span><span class="undefined"></span>
+</code></pre>
+<p>Sau đó, chúng ta có thể lấy một số thông tin về <code>Script</code></p>
+<pre><code class="lang-{.haskell}">Prelude PlutusTx Ledger.Scripts Week02.Gift&gt;<span class="hljs-keyword"> :i</span> Script
+type Script<span class="hljs-keyword"> :</span>: *
+newtype Script
+  = Script {unScript<span class="hljs-keyword"> :</span>: plutus-core-0.1.0.0:UntypedPlutusCore.Core.Type.Program
+                          plutus-core-0.1.0.0:PlutusCore.DeBruijn.Internal.DeBruijn
+                          plutus-core-0.1.0.0:PlutusCore.Default.Universe.DefaultUni
+                          plutus-core-0.1.0.0:PlutusCore.Default.Builtins.DefaultFun
+                          ()}
+        -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’<span class="hljs-built_in">
+instance </span>Eq Script
+  -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’<span class="hljs-built_in">
+instance </span>Ord Script
+  -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’<span class="hljs-built_in">
+instance </span>Show Script
+  -- Defined in ‘plutus-ledger-api-0.1.0.0:Plutus.V1.Ledger.Scripts’
+</code></pre>
+<p>Và ở đây chúng ta thấy rằng chúng ta có một unScripthàm, chúng ta có thể
+chạy</p>
+<pre><code class="lang-{.haskell}">Prelude PlutusTx Ledger.Scripts Week02.Gift&gt; unScript $ getValidator validator
+Program () (<span class="hljs-keyword">Version</span> () <span class="hljs-number">1</span> <span class="hljs-number">0</span> <span class="hljs-number">0</span>) (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 5})))))))) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1})))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (Var () (DeBruijn {dbnIndex = 5})) (Var () (DeBruijn {dbnIndex = 6}))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (Var () (DeBruijn {dbnIndex = 4})) (Var () (DeBruijn {dbnIndex = 7}))) (Var () (DeBruijn {dbnIndex = 6})))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (Var () (DeBruijn {dbnIndex = 3})) (Var () (DeBruijn {dbnIndex = 6}))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (Var () (DeBruijn {dbnIndex = 2})) (Var () (DeBruijn {dbnIndex = 6}))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (Var () (DeBruijn {dbnIndex = 1})) (Var () (DeBruijn {dbnIndex = 6}))))))))))) (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))))))) (Delay () (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 2}))))))) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (Var () (DeBruijn {dbnIndex = 1})) (Var () (DeBruijn {dbnIndex = 4}))) (Var () (DeBruijn {dbnIndex = 3})))))))))) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))))))) (Delay () (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (LamAbs () (DeBruijn {dbnIndex = 0}) (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (<span class="hljs-keyword">Apply</span> () (<span class="hljs-keyword">Apply</span> () (Var () (DeBruijn {dbnIndex = 1})) (Var () (DeBruijn {dbnIndex = 3}))) (Var () (DeBruijn {dbnIndex = 2})))))))))) (Delay () (Delay () (LamAbs () (DeBruijn {dbnIndex = 0}) (Var () (DeBruijn {dbnIndex = 1}))))))
+</code></pre>
+<p>Và ở đây bạn có thể thấy bản trình bày trung thực đến tốt đẹp của tập
+lệnh Plutus Core cho trình xác thực.</p>
+<p>Quay lại mã.</p>
+<p>Bây giờ chúng tôi có trình xác thực đầu tiên của mình, có hai loại nữa
+mà chúng tôi có thể xác định.</p>
+<p>Một là \&#39;\&#39;ValidatorHash\&#39;\&#39;, như tên cho thấy, là băm của trình xác
+nhận.</p>
+<pre><code class="lang-{.haskell}">valHash :: Ledger<span class="hljs-selector-class">.ValidatorHash</span>
+valHash = Scripts<span class="hljs-selector-class">.validatorHash</span> validator
+</code></pre>
+<p>Và, chúng tôi cũng có thể biến trình xác thực thành địa chỉ tập lệnh, là
+địa chỉ của tập lệnh trên blockchain.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">scrAddress </span>:: Ledger.<span class="hljs-keyword">Address
+</span><span class="hljs-keyword">scrAddress </span>= <span class="hljs-keyword">ScriptAddress </span>valHash
+</code></pre>
+<p>Bây giờ chúng ta có một địa chỉ tập lệnh được biểu diễn dưới dạng
+<code>scrAddress</code>.</p>
+<p>Chúng ta có thể xem xét hai kết quả này trong REPL .. code:: haskell</p>
+<blockquote>
+<p>Prelude PlutusTx Ledger.Scripts Week02.Gift> valHash
+c3168d465a84b7f50c2eeb51ccacd53a305bd7883787adb54236d8d17535ca14</p>
+<p>Prelude PlutusTx Ledger.Scripts Week02.Gift> scrAddress Address
+{addressCredential = ScriptCredential
+c3168d465a84b7f50c2eeb51ccacd53a305bd7883787adb54236d8d17535ca14,
+addressStakingCredential = Nothing}</p>
+</blockquote>
+<p>Ngoại trừ hàm logic <code>mkValidator</code> (trong trường hợp của chúng ta là một
+dòng), phần còn lại của mã chúng ta đã viết cho đến nay là bản soạn sẵn
+và sẽ rất giống nhau đối với tất cả các tập lệnh Plutus.</p>
+<p>Để thực sự thử tập lệnh này, chúng tôi cần mã ví. Trọng tâm của bài
+giảng này là xác nhận và không phải mã ví, nhưng ngắn gọn, đây là phần
+còn lại của mã.</p>
+<p>Hai điểm cuối được xác định. Điểm cuối là cách để người dùng kích hoạt
+một thứ gì đó với các tham số đầu vào.</p>
+<p><code>Endpoint give</code> sẽ lấy một đối số <code>Integer</code> để chỉ định số lượng
+lovelace sẽ được gửi vào hợp đồng.</p>
+<p><code>Endpoint grab</code> sẽ không có đối số và sẽ đơn giản tìm kiếm các UTxO tại
+địa chỉ tập lệnh này và sử dụng chúng.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">type</span> <span class="hljs-type">GiftSchema </span>=
+            Endpoint <span class="hljs-string">"give"</span> Integer
+        .\/ Endpoint <span class="hljs-string">"grab"</span> ()
+</code></pre>
+<p><code>endpoint give</code> ử dụng hàm trợ giúp <code>mustPayToOtherScript</code> hàm này lấy
+<code>valHash</code> của tập lệnh người nhận và một hàm <code>Datum</code> Cái mà trong ví dụ
+này là hoàn toàn bị bỏ qua. nó sử dụng hàm tạo <code>Datum</code> để biến <code>Data</code>
+thành <code>Datum</code>. Trong trường hợp này <code>Data</code> được sử dụng bằng cách sử
+dụng <code>Constr</code> hàm tạo lấy 0 và một danh sách trống.</p>
+<p>Cuối cùng số tiền cần gửi đến địa chỉ được chỉ định bằng cách sử dụng
+chức năng trợ giúp <code>Ada.lovelaceValueOf</code>.</p>
+<p>Giao dịch sau đó được gửi đi, tập lệnh chờ nó được xác nhận và sau đó in
+thông báo nhật ký.</p>
+<pre><code class="lang-{.haskell}">give <span class="hljs-symbol">:</span>: AsContractError e =&gt; Integer -&gt; Contract w s e ()
+give amount = <span class="hljs-keyword">do</span>
+   let tx = mustPayToOtherScript valHash (Datum <span class="hljs-variable">$ </span>Constr <span class="hljs-number">0</span> []) <span class="hljs-variable">$ </span>Ada.lovelaceValueOf amount
+   ledgerTx &lt;- submitTx tx
+   void <span class="hljs-variable">$ </span>awaitTxConfirmed <span class="hljs-variable">$ </span>txId ledgerTx
+   logInfo <span class="hljs-variable">@String</span> <span class="hljs-variable">$ </span>printf <span class="hljs-string">"made a gift of %d lovelace"</span> amount
+</code></pre>
+<p><code>endpoint grab</code> phức tạp hơn một chút.</p>
+<p>Chúng tôi sử dụng <code>utxoAt</code> địa chỉ tập lệnh mới của mình <code>scrAddress</code> để
+tra cứu tất cả các UTxO ở địa chỉ đó. Sau đó, chúng tôi cần tra cứu, sẽ
+được sử dụng bởi ví để tạo giao dịch. Tại đây, chúng tôi cho ví biết nơi
+tìm tất cả các UTxO và chúng tôi thông báo cho ví về trình xác thực. Hãy
+nhớ rằng, nếu bạn muốn sử dụng UTxO ở một địa chỉ tập lệnh, thì giao
+dịch chi tiêu cần cung cấp mã xác thực, trong khi giao dịch tạo ra UTxO
+chỉ cần cung cấp hàm băm.</p>
+<p>Sau đó, chúng tôi xác định giao dịch bằng cách sử dụng
+<code>mustSpendScriptOutput</code> cho mỗi UTxO được tìm thấy. Điều này nói lên
+rằng mọi UTxO ở địa chỉ tập lệnh này phải được chi tiêu bằng giao dịch
+mà chúng tôi đang xây dựng.</p>
+<p>Chúng tôi cũng chuyển một công cụ đổi quà hoàn toàn bị bỏ qua trong ví
+dụ của chúng tôi, vì vậy chúng tôi có thể đặt bất kỳ thứ gì ở đó - trong
+trường hợp này, một công cụ đổi quà được tạo bằng cách sử dụng hàm tạo
+<code>I</code> của loại <code>Data</code> có giá trị là <code>17</code>.</p>
+<p>Một lần nữa, chúng tôi gửi, chờ xác nhận và sau đó viết thông báo nhật
+ký.</p>
+<pre><code class="lang-{.haskell}">grab <span class="hljs-symbol">:</span>: forall w s e. AsContractError e =&gt; Contract w s e ()
+grab = <span class="hljs-keyword">do</span>
+   utxos &lt;- utxoAt scrAddress
+   let orefs   = fst &lt;<span class="hljs-variable">$&gt;</span> Map.toList utxos
+      lookups  = Constraints.unspentOutputs utxos      &lt;&gt;
+                 Constraints.otherScript validator
+      tx <span class="hljs-symbol">:</span>: TxConstraints Void Void
+      tx       = mconcat [mustSpendScriptOutput oref <span class="hljs-variable">$ </span>Redeemer <span class="hljs-variable">$ </span>I <span class="hljs-number">17</span> | oref &lt;- orefs]
+   ledgerTx &lt;- submitTxConstraintsWith <span class="hljs-variable">@Void</span> lookups tx
+   void <span class="hljs-variable">$ </span>awaitTxConfirmed <span class="hljs-variable">$ </span>txId ledgerTx
+   logInfo <span class="hljs-variable">@String</span> <span class="hljs-variable">$ </span><span class="hljs-string">"collected gifts"</span>
+</code></pre>
+<p>Cuối cùng, chúng tôi đặt tất cả lại với nhau trong hàm <code>endpoints</code>. Đây
+là mã soạn sẵn thông báo cho ví cung cấp tùy chọn của một số điểm cuối
+nhất định cho người dùng và sau đó, khi một điểm cuối đã được chọn, sẽ
+lặp lại và tiếp tục cung cấp các tùy chọn tương tự lặp đi lặp lại. Trong
+trường hợp của <code>give</code> người dùng sẽ được yêu cầu cung cấp đối số
+<code>Integer</code> .</p>
+<pre><code class="lang-{.haskell}">endpoints <span class="hljs-symbol">:</span>: Contract () GiftSchema Text ()
+endpoints = (give<span class="hljs-string">' `select` grab'</span>) <span class="hljs-meta">&gt;&gt; </span>endpoints
+  where
+    give<span class="hljs-string">' = endpoint @"give" &gt;&gt;= give
+    grab'</span> = endpoint @<span class="hljs-string">"grab"</span> <span class="hljs-meta">&gt;&gt;  </span>grab
+</code></pre>
+<p>Sau đó, chúng tôi có một lệnh nhỏ.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-attribute">mkSchemaDefinitions</span> <span class="hljs-string">''</span>GiftSchema
+</code></pre>
+<p>Và sau đó một số mã chỉ được sử dụng bởi Plutus Playground cho phép
+chúng tôi chỉ định các mã thông báo bổ sung có thể được sử dụng để thử
+nghiệm.</p>
+<pre><code class="lang-{.haskell}">mkKnownCurrencies <span class="hljs-string">[]</span>
+</code></pre>
+<p>Thử Nghiệm +++++++</p>
+<p>Bây giờ chúng tôi sẽ thử nghiệm script <code>Gift</code> trong playground.</p>
+<p>Bạn Copy <code>Gift</code> vào playground, sau đó biên dịch tập lệnh trong
+playground and nhấn nút <code>Simulate</code>.</p>
+<p><img src="img/playground_week2_1.png" alt=""></p>
+<p>Giờ hãy thêm một chiếc ví thứ ba và cung cấp cho tất cả các ví 10 Ada
+(10 triệu lovelace).</p>
+<p><img src="img/iteration2/pic__00024.png" alt=""></p>
+<p>Chúng tôi sẽ tạo một kịch bản trong đó ví 1 và 2 cho cảm giác yêu thích
+và ví 3 lấy tất cả.</p>
+<p>Bạn sẽ thấy rằng sân chơi đã hiển thị các nút giao diện người dùng cho
+hai endpoints <code>give</code> và <code>grab</code>. Sử dung <code>endpoint give</code> để tạo ví 1 tặng
+4 Ada và để tạo ví 2 tặng 6 Ada. Sau đó, thêm hành động chờ để đợi 1
+khối, và sau đó sử dụng vào endpoints <code>grab</code> để tạo ví 3 lấy tiền. Sau
+đó, thêm một hành động chờ khác để đợi 1 khối.</p>
+<p><img src="img/iteration2/pic__00025.png" alt=""></p>
+<p>Và bây giờ hãy nhấp vào <code>Evaluate</code>. Chúng tôi thấy rằng đã có bốn giao
+dịch.</p>
+<p>Giao dịch đầu tiên, như mọi khi, là giao dịch khởi đầu phân phối các
+khoản tiền ban đầu vào ví.</p>
+<p><img src="img/iteration2/pic__00026.png" alt=""></p>
+<p>Và có hai giao dịch xảy ra tại khe 1. Chúng là hai giao dịch <code>give</code></p>
+<p>Lệnh đầu tiên, Tx 0, là từ ví 2. Thứ tự ở đây không được xác định bởi
+thứ tự mà chúng tôi đã tạo các giao dịch trong trình mô phỏng. Điều quan
+trọng cần lưu ý là cả hai giao dịch <code>give</code> đều xảy ra tại cùng một thời
+điểm.</p>
+<p>Chúng tôi thấy ba kết quả đầu ra. Đầu ra đầu tiên là phí 10 lovelace
+được trả bằng ví 2. Đầu ra thứ hai là 6 Ada được gửi đến địa chỉ tập
+lệnh và đầu ra thứ ba là trả về thay đổi cho ví 2, là 4 Ada trừ đi phí.</p>
+<p><img src="img/iteration2/pic__00027.png" alt=""></p>
+<p>Và thứ hai, Tx 1, là từ ví 1. Một lần nữa, với các UTxO đầu ra tương tự.</p>
+<p><img src="img/iteration2/pic__00028.png" alt="Bây giờ chúng ta có hai UTxO ở địa chỉ tập
+lệnh."></p>
+<p>Sau đó, chúng tôi có <code>grab</code> tại vị trí 2 được kích hoạt bởi ví 3. Chúng
+tôi thấy hai UTxO từ tập lệnh là đầu vào và sau đó là hai đầu ra. Một
+đầu ra là phí và đầu ra còn lại, được trả cho ví 3, là 10 Ada trừ đi các
+khoản phí đó. Bạn sẽ nhận thấy rằng phí hiện cao hơn chúng ta đã thấy
+trước đây và điều này là do một tập lệnh hiện đã được thực thi, điều này
+làm cho nó đắt hơn. Tuy nhiên, các khoản phí ở đây vẫn chưa được hiệu
+chỉnh hoàn toàn với những khoản phí sẽ được tính trên blockchain thực.</p>
+<p><img src="img/iteration2/pic__00029.png" alt=""></p>
+<p>Và, bằng cách cuộn xuống, chúng tôi thấy số dư cuối cùng của ví.</p>
+<p><img src="img/iteration2/pic__00030.png" alt=""></p>
+<p>Nếu bạn cuộn xuống sâu hơn, bạn sẽ thấy một số dấu vết và kết quả đầu ra
+nhật ký sẽ cung cấp thêm chi tiết về việc thực thi.</p>
+<p>Như đã đề cập, tập lệnh này sử dụng trình xác thực đơn giản nhất có thể,
+một trình xác thực luôn thành công. Nhưng trình xác thực nhỏ ngớ ngẩn
+này có thể hữu ích trong tình huống ai đó muốn đóng góp một số biểu
+tượng tình yêu cho cộng đồng và để lại cho bạn!</p>
+<h3 id="v-d-2-burn">Ví dụ 2 - Burn</h3>
+<p>Hãy xem ví dụ thứ hai về trình xác nhận.</p>
+<p>Chúng ta sẽ bắt đầu bằng cách sao chép <code>Gift.hs</code>và đổi tên nó <code>Burn.hs</code>.</p>
+<p>Trong ví dụ <code>Gift</code>, chúng tôi có một trình xác nhận luôn thành công.
+Trong ví dụ này, chúng tôi muốn làm ngược lại - một trình xác nhận luôn
+không thành công.</p>
+<p>Nhớ lại rằng trình xác thực chỉ ra sự thất bại bằng cách ném ra một lỗi.
+Vì vậy, chúng tôi có thể sửa đổi trình xác thực của mình cho phù hợp.</p>
+<pre><code class="lang-{.haskell}">mkValidator :: Data -&gt; Data -&gt; Data -&gt; ()
+mkValidator <span class="hljs-keyword">_</span> <span class="hljs-keyword">_</span> <span class="hljs-keyword">_</span> = error ()
+</code></pre>
+<p>Nếu chúng tôi tải mô-đun trong REPL và nhìn thấy <em>error</em></p>
+<pre><code class="lang-{.haskell}">Prelude Week02.Burn&gt; :t error
+<span class="hljs-keyword">error </span>:: [Char] -&gt; a
+</code></pre>
+<p>Chúng tôi thấy định nghĩa cho chức năng <code>error</code> được xác định trong
+Haskell tiêu chuẩn <code>Prelude</code>. Tuy nhiên, một trong phạm vi trong mã của
+chúng tôi trên thực tế là chức năng <code>error</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Burn</span>&gt; <span class="hljs-selector-pseudo">:t</span> <span class="hljs-selector-tag">PlutusTx</span><span class="hljs-selector-class">.Prelude</span><span class="hljs-selector-class">.error</span>
+<span class="hljs-selector-tag">PlutusTx</span><span class="hljs-selector-class">.Prelude</span><span class="hljs-selector-class">.error</span> :: () <span class="hljs-selector-tag">-</span>&gt; <span class="hljs-selector-tag">a</span>
+</code></pre>
+<p>Thông thường trong Haskell, bạn có hàm <code>error</code> nhận một chuỗi thông báo
+lỗi và gây ra lỗi. Trong Plutus, hàm <code>error</code>không nhận một chuỗi - nó
+chỉ nhận khiểu trống <code>()</code> và trả về một kiểu tùy ý.</p>
+<p>Và điều đó đưa chúng ta đến một điểm quan trọng.</p>
+<p>Chúng tôi đã đề cập trước đó rằng chúng tôi sử dụng <code>INLINABLE</code> trên hàm
+<code>mkValidator</code> để cho phép nó được sử dụng bởi mã Haskell Prelude. Trong
+Haskell có nhiều chức năng có sẵn thông qua mô-đun <code>Prelude</code>, nhưng
+những chức năng này sẽ không thể sử dụng được trong Plutus vì chúng
+không được định nghĩa là có thể nhập được. Vì vậy, nhóm Plutus đã cung
+cấp một Đoạn dạo đầu thay thế có thể được sử dụng để xác nhận.</p>
+<p>Cách mà Plutus Prelude có thể được ưu tiên hơn Haskell Prelude, thường
+có trong phạm vi theo mặc định, là sử dụng <code>LANGUAGE</code> trong mã.</p>
+<pre><code class="lang-{.haskell}">{-# LANGUAGE NoImplicitPrelude   #-}
+</code></pre>
+<p>Sau đó, bằng cách nhập PlutusTx.Prelude, các chức năng của nó được sử
+dụng thay cho các chức năng Prelude tiêu chuẩn.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">import</span> PlutusTx.Prelude <span class="hljs-keyword">hiding</span> (<span class="hljs-type">Semigroup(..)</span>, <span class="hljs-title">unless</span>)
+</code></pre>
+<p>Bạn cũng có thể nhận thấy rằng Prelude tiêu chuẩn cũng được nhập khẩu.
+Tuy nhiên, nó chỉ nhằm mang lại một số chức năng không liên quan gì đến
+xác thực mà chỉ dành cho mã off-chain và playground.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">import</span> Prelude (<span class="hljs-type">IO</span>, <span class="hljs-type">Semigroup</span> (..), String)
+</code></pre>
+<p>Nó có thể gây nhầm lẫn. Rất nhiều chức năng trong Plutus Prelude có cùng
+chữ ký và hành vi giống như tên gọi của chúng trong Prelude tiêu chuẩn,
+nhưng điều đó không phải lúc nào cũng đúng và đây errorlà một ví dụ.</p>
+<p>Chỉ cần nhớ rằng khi bạn đang sử dụng một cái gì đó trong tập lệnh
+Plutus trông giống như một hàm từ Đoạn dạo đầu tiêu chuẩn, thì những gì
+bạn thực sự đang sử dụng là một hàm từ Đoạn dạo đầu Plutus. Thường thì
+chúng sẽ có cùng một chữ ký, nhưng chúng không phải lúc nào cũng giống
+hệt nhau - ví dụ: tiền lệ của toán tử có thể không giống nhau</p>
+<p>Nhìn lại trình xác thực mới của chúng tôi, bây giờ chúng ta có một trình
+xác thực sẽ luôn không thành công.</p>
+<pre><code class="lang-{.haskell}">mkValidator :: Data -&gt; Data -&gt; Data -&gt; ()
+mkValidator <span class="hljs-keyword">_</span> <span class="hljs-keyword">_</span> <span class="hljs-keyword">_</span> = error ()
+</code></pre>
+<p>Chúng tôi sẽ để mọi thứ khác như cũ và kiểm tra tác dụng của sự thay đổi
+này, bằng cách sử dụng sân chơi. Sau khi nhấp <code>Compile</code>, kịch bản trước
+đó vẫn sẽ xuất hiện trong trình mô phỏng. Và sau khi nhấp <code>Evaluate</code> và
+cuộn xuống một chút, chúng ta có thể thấy ví 1 và 2 đã tạo quà tặng
+nhưng ví 3 không thể lấy được.</p>
+<p><img src="img/iteration2/pic__00031.png" alt=""></p>
+<p>Nếu chúng tôi cuộn xuống thêm, chúng tôi sẽ tìm thấy một thông báo nhật
+ký cho thấy rằng việc xác thực không thành công.</p>
+<pre><code class="lang-{.}">, Slot 2: 00000000-0000-4000-8000-000000000002 {Contract<span class="hljs-built_in"> instance </span>for wallet 3}:
+      Contract<span class="hljs-built_in"> instance </span>stopped with error: <span class="hljs-string">"WalletError (ValidationError (ScriptFailure (EvaluationError [])))"</span> ]
+</code></pre>
+<p>Vì vậy, trong ví dụ đầu tiên của chúng tôi, chúng tôi có một trình xác
+thực luôn thành công và cho phép bất kỳ ai lấy UTxO từ nó. Trong ví dụ
+thứ hai, chúng tôi có trình xác thực luôn không thành công và bất kỳ
+UTxO nào được gửi đến địa chỉ tập lệnh này không bao giờ có thể được
+truy xuất. Về cơ bản đây là một cách để đốt tiền, có thể hữu ích trong
+một số trường hợp.</p>
+<p>Khi nhìn vào nhật ký, chúng tôi thấy rằng quá trình xác nhận không thành
+công, nhưng chúng tôi không biết tại sao nó không thành công. đây là một
+cách để thay đổi điều đó bằng cách sử dụng một biến thể của lỗi -
+<code>traceError</code>.</p>
+<pre><code class="lang-{.haskell}">Prelude Week02.Burn&gt; :t PlutusTx<span class="hljs-selector-class">.Prelude</span><span class="hljs-selector-class">.traceError</span>
+PlutusTx<span class="hljs-selector-class">.Prelude</span><span class="hljs-selector-class">.traceError</span> :: PlutusTx<span class="hljs-selector-class">.Builtins</span><span class="hljs-selector-class">.String</span> -&gt; a
+</code></pre>
+<p>Hàm nhận một chuỗi, nhưng không phải là một chuỗi Haskell. Nó là một
+chuỗi Plutus. Để biên dịch cái này, chúng ta cần sử dụng
+OverloadedStringsphần mở rộng GHC.</p>
+<pre><code class="lang-{.haskell}">{-# LANGUAGE OverloadedStrings   #-}
+</code></pre>
+<p>Sau đó, chúng tôi có thể cập nhật trình xác thực của mình.</p>
+<pre><code class="lang-{.haskell}">mkValidator <span class="hljs-keyword">_</span> <span class="hljs-keyword">_</span> <span class="hljs-keyword">_</span> = traceError <span class="hljs-string">"BURNT!"</span>
+</code></pre>
+<p>Nếu bây giờ chúng tôi chạy cùng một kịch bản trong sân chơi với mã mới,
+chúng tôi sẽ thấy thông báo lỗi tùy chỉnh mà chúng tôi đã thêm.</p>
+<pre><code class="lang-{.}">, Slot 2: 00000000-0000-4000-8000-000000000002 {Contract<span class="hljs-built_in"> instance </span>for wallet 3}:
+      Contract<span class="hljs-built_in"> instance </span>stopped with error: <span class="hljs-string">"WalletError (ValidationError (ScriptFailure (EvaluationError [\"</span>BURNT!\<span class="hljs-string">"])))"</span> ]
+</code></pre>
+<p><img src="img/iteration2/pic__00032.png" alt=""></p>
+<p>Ví dụ 3 - Forty Two (42) ~~~~~~~~~~~~~~~~~~~~~</p>
+<p>Đối với ví dụ tiếp theo, chúng tôi sẽ viết một trình xác nhận không hoàn
+toàn bỏ qua tất cả các đối số của nó. Chúng tôi sẽ viết một bài báo mong
+đợi một người mua lại đơn giản.</p>
+<p>Bây giờ chúng ta quan tâm đến người đổi quà, chúng ta cần có thể tham
+khảo nó. Hãy gọi nó <code>r</code>.</p>
+<pre><code class="lang-{.haskell}">{-# INLINABLE mkValidator #-}
+mkValidator :: Data -&gt; Data -&gt; Data -&gt; ()
+mkValidator _ r _
+</code></pre>
+<p>Giả sử rằng chúng tôi muốn xác thực được thông qua nếu người đổi <code>I 42</code>.</p>
+<pre><code class="lang-{.haskell}">{-# INLINABLE mkValidator #-}
+mkValidator :: Data -&gt; Data -&gt; Data -&gt; ()
+mkValidator _ r _
+   | r == I <span class="hljs-number">42</span> = ()
+   | <span class="hljs-keyword">otherwise</span> = traceError <span class="hljs-string">"wrong redeemer"</span>
+</code></pre>
+<p>Nếu chúng ta chạy điều này ngay bây giờ trong sân chơi, việc xác nhận sẽ
+luôn không thành công. Chúng tôi cần sửa đổi mã off-chain để thêm đầu
+vào cho Endpoint <code>grab</code> để ví 3 có thể chuyển vào một điểm <code>Integer</code> mà
+sau đó chúng tôi có thể chuyển cho trình xác thực với tư cách là
+redeemer.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">type</span> GiftSchema =
+          Endpoint <span class="hljs-string">"give"</span> <span class="hljs-built_in">Integer</span>
+      .\/ Endpoint <span class="hljs-string">"grab"</span> <span class="hljs-built_in">Integer</span>
+</code></pre>
+<p>Chung tôi thêm đối số redeemer vào khai báo <code>grab</code>. Lưu ý rằng việc thêm
+số <code>Integer</code> trong chức năng ký, cũng như tham số <code>n</code> cái mà làm tham
+chiếu.</p>
+<pre><code class="lang-{.haskell}">grab :: <span class="hljs-keyword">forall</span> w s e. AsContractError e =&gt; Integer -&gt; Contract w s e ()
+grab n = <span class="hljs-built_in">do</span>
+</code></pre>
+<p>Sau đó, chúng ta có thể chuyển nó vào hàm <code>mustSpendScriptOutput</code> thay
+vì giá trị vứt bỏ mà chúng ta đã sử dụng trước đó.</p>
+<pre><code class="lang-{.haskell}">tx = mconcat [mustSpendScriptOutput oref <span class="hljs-variable">$ </span>Redeemer <span class="hljs-variable">$ </span>I n | oref &lt;- orefs]
+</code></pre>
+<p>Một thay đổi nữa, chúng ta cần thay đổi <code>&gt;&gt;</code> thành <code>&gt;&gt;=</code> trong đoạn mã
+sau, và bây giờ <code>grab</code> có một đối số. Bạn có thể sử dụng REPL để thấy
+<code>&gt;&gt;</code> và <code>&gt;&gt;=</code> và bây giờ tại sao dừng cái thứ hai. Về cơ bản, cả hai đều
+trình tự các hành động, nhưng <code>&gt;&gt;</code> không lấy giá trị đầu múp,con <code>&gt;&gt;=</code>
+truy cập giá trị được bao bọc và chuyển nó cho hành động tiếp theo.</p>
+<pre><code class="lang-{.haskell}">grab' = endpoint @<span class="hljs-string">"grab"</span> &gt;&gt;= grab
+</code></pre>
+<p>Bây giờ chúng ta có thể thử nó trong sân chơi. Sau khi thêm mã mới và
+nhấp vào <code>Simulate</code> bạn sẽ nhận thấy rằng kịch bản cũ đã biến mất. Đó là
+bởi vì các điểm cuối (Endpoint) đã thay đổi và kịch bản cũ không còn hợp
+lệ.</p>
+<p>Hãy thiết lập một kịch bản chỉ sử dụng hai ví. Ví một sẽ cung cấp cho 3
+Ada oo hợp đồng và ví 2 sẽ cố gắng lấy chúng, nhưng lần này, ví 2 sẽ cần
+chuyển vào một giá trị sẽ được sử dụng để tạo người đổi.</p>
+<p>Đối với lần thử đầu tiên, chúng tôi sẽ thêm giá trị người đổi sai, trong
+trường hợp này là 100.</p>
+<p><img src="img/iteration2/pic__00033.png" alt=""></p>
+<p>Nếu chúng tôi nhấp vào <code>Evaluate</code>, chúng ta thấy rằng chúng ta chỉ có
+hai giao dịch và chúng ta thấy rằng Ada vẫn còn trong tập lệnh, điều này
+cho thấy rằng ví 2 không lấy được nó.</p>
+<p><img src="img/iteration2/pic__00034.png" alt=""></p>
+<p>Các số dư cuối cùng cũng cho thấy điều này.</p>
+<p><img src="img/iteration2/pic__00035.png" alt=""></p>
+<p>Và, nếu chúng ta nhìn vào dấu vết, chúng ta sẽ tìm ra lỗi.</p>
+<pre><code class="lang-{.}">, Slot 2: 00000000-0000-4000-8000-000000000001 {Contract<span class="hljs-built_in"> instance </span>for wallet 2}:
+      Contract<span class="hljs-built_in"> instance </span>stopped with error: <span class="hljs-string">"WalletError (ValidationError (ScriptFailure (EvaluationError [\"</span>wrong redeemer\<span class="hljs-string">"])))"</span> ]
+</code></pre>
+<p>Nếu chúng ta quay lại kịch bản, thay đổi giá trị thành <code>42</code> và nhấp
+<code>Evaluate</code> lại, chúng ta sẽ thấy rằng xác thực thành công.</p>
+<p><img src="img/iteration2/pic__00036.png" alt=""></p>
+<p>Bây giờ chúng ta thấy giao dịch thứ ba trong đó ví 2 quản lý để thu
+tiền, trừ đi phí.</p>
+<p><img src="img/iteration2/pic__00037.png" alt=""></p>
+<p>Chúng tôi thấy rằng số dư cuối cùng là như chúng tôi mong đợi và các bản
+ghi cũng cho thấy rằng việc xác thực không gây ra lỗi, điều đó có nghĩa
+là quá trình xác thực đã thành công.</p>
+<p>Vì vậy, đó là ví dụ đầu tiên về trình xác thực xem xét ít nhất một trong
+các đối số của nó.</p>
+<h3 id="v-d-4-typed">Ví dụ 4 - Typed</h3>
+<p>Nó đã được đề cập ở phần đầu của bài giảng, đây là Plutus cấp thấp và
+trên thực tế, không ai sẽ viết các hàm xác nhận như thế này.</p>
+<p>Bây giờ chúng ta sẽ xem nó thực sự được thực hiện như thế nào bằng cách
+sử dụng một phiên bản đã đánh máy.</p>
+<p>Mặc dù kiểu <code>Data</code>này mạnh mẽ và bạn có thể mã hóa tất cả các loại dữ
+liệu vào nó, nhưng nó không thực sự giống Haskell. Nó gần giống như bạn
+đang viết bằng một ngôn ngữ không định kiểu như Javascript hoặc Python.
+Nó giống như một khối dữ liệu, nó có thể chứa bất cứ thứ gì nên bạn
+không thực sự có bất kỳ loại an toàn nào. Bạn sẽ luôn cần kiểm tra, ví
+dụ, nếu bạn đang mong đợi một số nguyên mà bạn thực sự được cung cấp một
+số nguyên.</p>
+<p>Nó đặc biệt tệ với đối số thứ ba, bối cảnh. Mặc dù thật dễ dàng để tưởng
+tượng rằng bằng cách nào đó bạn có thể mã hóa một giao dịch với các đầu
+vào và đầu ra của nó thành kiểu <code>Data</code>, nhưng hoàn toàn không rõ ràng
+điều đó được thực hiện như thế nào.</p>
+<p>Chúng tôi muốn sử dụng các kiểu dữ liệu cụ thể hơn được điều chỉnh cho
+phù hợp với logic nghiệp vụ.</p>
+<p>Điều này thực sự có thể thực hiện được với cái gọi là Typed Validators.
+Điều này có nghĩa là chúng ta có thể thay thế các lần xuất hiện <code>Data</code>
+trong <code>mkValidator</code> chữ ký bằng các kiểu phù hợp hơn.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-function"><span class="hljs-title">mkValidator</span> :: Data -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> ()
+</code></pre>
+<p>Trong ví dụ nhỏ ngớ ngẩn của chúng tôi, chúng tôi hoàn toàn bỏ qua
+Datum, vì vậy một loại phù hợp hơn sẽ chỉ là loại Unit - ().</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-function"><span class="hljs-title">mkValidator</span> :: () -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> ()
+</code></pre>
+<p>Đối với redeemer, trong ví dụ này, chúng tôi chỉ xử lý các số nguyên, vì
+vậy có lẽ sẽ hợp lý hơn khi sử dụng Số nguyên thay thế..</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-function"><span class="hljs-title">mkValidator</span> :: () -&gt;</span> I<span class="hljs-function"><span class="hljs-title">nteger</span> -&gt;</span> D<span class="hljs-function"><span class="hljs-title">ata</span> -&gt;</span> ()
+</code></pre>
+<p>Đối với context, có một kiểu hay hơn nhiều được gọi là <code>ScriptContext</code>
+được tạo ra chính xác cho mục đích này.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-function"><span class="hljs-title">mkValidator</span> :: () -&gt;</span> I<span class="hljs-function"><span class="hljs-title">nteger</span> -&gt;</span> S<span class="hljs-function"><span class="hljs-title">criptContext</span> -&gt;</span> ()
+</code></pre>
+<p>Cuối cùng, chúng tôi đã đề cập rằng hơi bất thường khi sử dụng <code>()</code> làm
+kiểu trả về. Tự nhiên hơn nhiều sẽ được sử dụng <code>Bool</code> để chỉ ra xác
+thực thành công hay thất bại.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-function"><span class="hljs-title">mkValidator</span> :: () -&gt;</span> I<span class="hljs-function"><span class="hljs-title">nteger</span> -&gt;</span> S<span class="hljs-function"><span class="hljs-title">criptContext</span> -&gt;</span> Bool
+</code></pre>
+<p>Vì vậy, đây là một cách tốt hơn để viết mã xác nhận. Hai loại cuối cùng
+<code>SciprtContext</code> và <code>Bool</code>, nhưng hai loại đầu tiên có thể khác nhau tùy
+thuộc vào tình huống.</p>
+<p>Trong trường hợp này, bây giờ chúng ta hãy viết lại hàm cho phù hợp bằng
+cách sử dụng các kiểu mới này. Tham số r bây giờ không còn là kiểu
+<code>Data</code> nữa- nó là một kiểu <code>Integer</code>, vì vậy chúng ta có thể chỉ cần
+kiểm tra xem nó bằng 42 thay vì kiểm tra nó với một kiểu <code>Data</code> đã xây
+dựng .</p>
+<p>Và, khi chúng ta trả về a Bool, chúng ta có thể biến hàm thành một biểu
+thức boolean.</p>
+<pre><code class="lang-{.haskell}">{-# INLINABLE mkValidator #-}
+mkValidator :: () -&gt; Integer -&gt; ScriptContext -&gt; Bool
+mkValidator _ r _ = r == <span class="hljs-number">42</span>
+</code></pre>
+<p>Điều này sẽ có cùng một vấn đề mà chúng tôi đã gặp trước đó, trong
+trường hợp có lỗi, chúng tôi sẽ không nhận được thông báo lỗi đẹp. Có
+một hàm Plutus hay được gọi là hàm <code>traceIfFalse</code> nó nhẫn <code>String</code> và
+<code>Bool</code> sau đó trả về <code>Bool</code>. Nếu đầu tiên <code>Bool</code> là <code>True</code>, thì kết quả
+sẽ là <code>True</code> và <code>String</code> sẽ bỏ qua. Tuy nhiên nếu đầu tiên <code>Bool</code> là
+<code>False</code>, thì kết quả là <code>False</code> và <code>String</code> được ghi lại.</p>
+<pre><code class="lang-{.haskell}">PlutusTx<span class="hljs-selector-class">.Prelude</span><span class="hljs-selector-class">.traceIfFalse</span>
+      :: PlutusTx<span class="hljs-selector-class">.Builtins</span><span class="hljs-selector-class">.String</span> -&gt; Bool -&gt; Bool
+</code></pre>
+<p>Đây chính xác là những gì chúng ta cần.</p>
+<pre><code class="lang-{.haskell}">{-# INLINABLE mkValidator #-}
+mkValidator :: () -&gt; Integer -&gt; ScriptContext -&gt; Bool
+mkValidator _ r _ = traceIfFalse <span class="hljs-string">"wrong redeemer"</span> $ r == <span class="hljs-number">42</span>
+</code></pre>
+<p>Điều này sẽ chưa được biên dịch vì các phần khác của mã chưa được nhập
+chính xác. Chúng tôi cần phải điều chỉnh bảng nấu của chúng tôi.</p>
+<p>Đầu tiên, chúng tôi giới thiệu một kiểu dữ liệu giả mới, ở đây chúng tôi
+gọi là <code>Typed</code>, đơn giản dựa trên tên của tập lệnh. Đối với loại này,
+chúng tôi phải cung cấp một phiên bản của <code>Scripts.ValidatorTypes</code>.</p>
+<p>Mục đích của trường hợp này là khai báo các loại cho datum và redeemer.</p>
+<pre><code class="lang-{.haskell}">data Typed<span class="hljs-built_in">
+instance </span>Scripts.ValidatorTypes Typed where
+    type<span class="hljs-built_in"> instance </span>DatumType Typed = ()
+    type<span class="hljs-built_in"> instance </span>RedeemerType Typed = Integer
+</code></pre>
+<p>Đây là Haskell khá nâng cao, được gọi là lập trình mức kiểu, nhưng cũng
+giống như Template Haskell mà chúng ta đã gặp, bạn không thực sự cần
+hiểu sâu về nó vì tất cả các script sẽ tuân theo cùng một khuôn mẫu.</p>
+<p>Bây giờ chúng ta cần biên dịch trình xác nhận. Nơi trước đây chúng ta đã
+sử dụng <code>mkValidatorScript</code>,, bây giờ chúng ta sử dụng một cái gì đó
+được gọi là <code>mkTypedValidator</code>, lấy kiểu dữ liệu mới của chúng ta làm
+tham số và tạo ra một cái gì đó có kiểu <code>TypedValidator</code>.</p>
+<pre><code class="lang-{.haskell}">typedValidator <span class="hljs-symbol">:</span>: Scripts.TypedValidator Typed
+typedValidator = Scripts.mkTypedValidator @Typed
+    $$(PlutusTx.compile [<span class="hljs-params">||</span> mkValidator <span class="hljs-params">||</span>])
+    $$(PlutusTx.compile [<span class="hljs-params">||</span> wrap <span class="hljs-params">||</span>])
+  where
+    wrap = Scripts.wrapValidator @() @Integer
+</code></pre>
+<p>Điều này tương tự với mã <code>mkValidator</code>, nhưng loại này chúng tôi cũng
+biên dịch một hàm <code>wrapValidator</code> nhận kiểu dữ liệu và redeemer.</p>
+<p>Để điều này hoạt động, trước tiên, chúng ta cần thêm một import.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">import</span> <span class="hljs-keyword">qualified</span> Ledger.Typed.Scripts <span class="hljs-keyword">as</span> Scripts
+</code></pre>
+<p>Trong ví dụ này, nó đang được nhập đủ điều kiện và sử dụng tiền tố
+<code>Scripts</code> , nhưng điều này là tùy ý và bạn có thể chọn một số cách khác
+để tham chiếu đến mô-đun.</p>
+<p>Chúng tôi thực hiện những thay đổi này, mã Haskell sẽ được biên dịch và
+bây giờ chúng tôi cần thay đổi bản soạn thảo Haskell Mẫu tạo ra hàm
+<code>validator</code>.</p>
+<pre><code class="lang-{.haskell}">validator :: Validator
+validator = Scripts<span class="hljs-selector-class">.validatorScript</span> typedValidator
+</code></pre>
+<p>Ở đây chúng tôi đã sử dụng hàm <code>validatorScript</code> để tạo trình xác thực
+không định kiểu từ phiên bản đã nhập của chúng tôi.</p>
+<p>Tất nhiên, để có được hàm băm, chúng ta có thể sử dụng trình xác thực mà
+chúng ta có và biến nó thành một trình xác thực như <code>ValidatorHash</code>
+chúng ta đã làm trước đây, nhưng có một cách trực tiếp hơn, trông giống
+hệt nhau, nhưng trong trường hợp <code>Scripts</code>này là đến từ mô-đun
+<code>Ledger.Typed.Scripts</code> hơn là <code>Ledger.Scripts</code>. Phiên bản này lấy trực
+tiếp trình xác thực đã nhập.</p>
+<pre><code class="lang-{.haskell}">valHash :: Ledger<span class="hljs-selector-class">.ValidatorHash</span>
+valHash = Scripts<span class="hljs-selector-class">.validatorHash</span> typedValidator
+</code></pre>
+<p>Địa chỉ tập lệnh được tính như trước đây.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">scrAddress </span>:: Ledger.<span class="hljs-keyword">Address
+</span><span class="hljs-keyword">scrAddress </span>= <span class="hljs-keyword">scriptAddress </span>validator
+</code></pre>
+<p>Trong ví dụ cực kỳ đơn giản này, nó có vẻ không đáng để nỗ lực, nhưng
+đối với các hợp đồng thực tế, làm như thế này sẽ tốt hơn nhiều.</p>
+<p>Mã off-chain gần như giống hệt nhau.</p>
+<p>Có một thay đổi nhỏ đối với giveđiểm cuối. Mặc dù chúng tôi vẫn chưa xem
+xét chi tiết phần này của mã, nhưng có thể thực hiện các thay đổi sau.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">let</span> tx = mustPayToTheScript () $ Ada.lovelaceValueOf amount
+ledgerTx &lt;- submitTxConstraints inst tx
+</code></pre>
+<p>Hàm <code>mustPayToOtherScript</code> đã được thay thế bằng <code>mustPayToTheScript</code>.
+Đây là một script tiện lợi cho phép chúng ta truyền chỉ vào () vì chúng
+ta còn cần phải xây dựng một giá trị của kiểu Data. Chúng ta cũng không
+cần chuyển mã băm tập lệnh nữa.</p>
+<p>Hành vi của mã này sẽ giống với hành vi trong ví dụ trước, vì vậy chúng
+tôi sẽ không xem qua nó trong sân chơi.</p>
+<p>Bây giờ chúng tôi sẽ giải thích cách hoạt động thực sự của nó. Làm cách
+nào để Plutus chuyển đổi các kiểu dữ liệu tùy chỉnh này thành kiểu triển
+khai cấp thấp thực tế - Datakiểu.</p>
+<p>Chúng ta có thể xem mã trong mô-đun PlutusTx.IsData.Class .</p>
+<p>Ở đây chúng ta thấy rằng có một lớp kiểu khá đơn giản được định nghĩa
+được gọi là <code>IsData</code>.</p>
+<p><img src="img/iteration2/pic__00037.png" alt=""></p>
+<p>Lớp này cung cấp hai chức năng</p>
+<ul>
+<li><code>toData</code> nhận một giá trị và chuyển đổi nó thành <code>Data</code></li>
+<li><code>fromData</code> nhận một giá trị của kiểu <code>Data</code> cố gắng chuyển đổi nó
+thành một thể hiện của kiểu <code>IsData</code>. Điều này có thể không thành
+công vì không phải tất cả các giá trị của kiểu <code>Data</code> sẽ được chuyển
+đổi thành kiểu đích..</li>
+</ul>
+<p>Hãy thử điều này trong REPL.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Typed</span>&gt; <span class="hljs-selector-tag">import</span> <span class="hljs-selector-tag">PlutusTx</span>
+<span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">PlutusTx</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Typed</span>&gt; <span class="hljs-selector-tag">import</span> <span class="hljs-selector-tag">PlutusTx</span><span class="hljs-selector-class">.IsData</span><span class="hljs-selector-class">.Class</span>
+<span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">PlutusTx</span> <span class="hljs-selector-tag">PlutusTx</span><span class="hljs-selector-class">.IsData</span><span class="hljs-selector-class">.Class</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Typed</span>&gt; <span class="hljs-selector-pseudo">:i</span> <span class="hljs-selector-tag">IsData</span>
+</code></pre>
+<p>Chúng tôi biết điều đó <code>()</code> and <code>Integer</code> cả hai đều là trường hợp của
+<code>IsData</code> vì chúng đã hoạt động trong ví dụ của chúng tôi.</p>
+<p>Hãy chuyển đổi <code>Integer</code> thành <code>Data</code></p>
+<pre><code class="lang-{.haskell}"><span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">PlutusTx</span> <span class="hljs-selector-tag">PlutusTx</span><span class="hljs-selector-class">.IsData</span><span class="hljs-selector-class">.Class</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Typed</span>&gt; <span class="hljs-selector-tag">toData</span> (42 :: <span class="hljs-selector-tag">Integer</span>)
+<span class="hljs-selector-tag">I</span> 42
+</code></pre>
+<p>Chúng tôi thấy rằng điều này đã được chuyển đổi thành một phiên bản của
+kiểu Data bằng cách sử dụng hàm tạo I , mà chúng tôi đã thực hiện theo
+cách thủ công trước khi chúng tôi sử dụng xác thực.</p>
+<p>Bây giờ hãy làm theo cách khác</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">PlutusTx</span> <span class="hljs-selector-tag">PlutusTx</span><span class="hljs-selector-class">.IsData</span><span class="hljs-selector-class">.Class</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Typed</span>&gt; <span class="hljs-selector-tag">fromData</span> (<span class="hljs-selector-tag">I</span> 42) :: <span class="hljs-selector-tag">Maybe</span> <span class="hljs-selector-tag">Integer</span>
+<span class="hljs-selector-tag">Just</span> 42
+</code></pre>
+<p>Chúng tôi nhận được một <code>Just 42</code> back - <code>Just</code> là <code>Maybe</code> tạo khi
+<code>Maybe</code> là <code>Nothing</code>.</p>
+<p>Và khi nó không thành công, khi nó không thể chuyển đổi sang loại đích,
+chúng ta sẽ lấy lại <code>Nothing</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">PlutusTx</span> <span class="hljs-selector-tag">PlutusTx</span><span class="hljs-selector-class">.IsData</span><span class="hljs-selector-class">.Class</span> <span class="hljs-selector-tag">Week02</span><span class="hljs-selector-class">.Typed</span>&gt; <span class="hljs-selector-tag">fromData</span> (<span class="hljs-selector-tag">List</span> <span class="hljs-selector-attr">[]</span>) :: <span class="hljs-selector-tag">Maybe</span> <span class="hljs-selector-tag">Integer</span>
+<span class="hljs-selector-tag">Nothing</span>
+</code></pre>
+<p>Nếu chúng ta kiểm tra<code>IsData</code>. Chúng ta có thể thấy tất cả các kiểu mà
+mẫu này sẽ hoạt động cho tất cả các kiểu là <code>IsData</code> được xác định.</p>
+<pre><code class="lang-{.haskell}">Prelude PlutusTx PlutusTx.IsData.Class Week02.Typed&gt;<span class="hljs-keyword"> :i</span> IsData
+type IsData<span class="hljs-keyword"> :</span>: * -&gt; Constraint
+class IsData a where
+  toData<span class="hljs-keyword"> :</span>: a -&gt; Data
+  fromData<span class="hljs-keyword"> :</span>: Data -&gt; Maybe a
+  {-<span class="hljs-comment"># MINIMAL toData, fromData #-}</span>
+        -- Defined in ‘PlutusTx.IsData.Class’<span class="hljs-built_in">
+instance </span>IsData a =&gt; IsData (Maybe a)
+  -- Defined in ‘plutus-tx-0.1.0.0:PlutusTx.IsData.Instances’<span class="hljs-built_in">
+instance </span>(IsData a, IsData b) =&gt; IsData (Either a b)
+  -- Defined in ‘plutus-tx-0.1.0.0:PlutusTx.IsData.Instances’<span class="hljs-built_in">
+instance </span>IsData Bool
+  -- Defined in ‘plutus-tx-0.1.0.0:PlutusTx.IsData.Instances’<span class="hljs-built_in">
+instance </span>(IsData a, IsData b, IsData c, IsData d) =&gt;
+         IsData (a, b, c, d)
+  -- Defined in ‘plutus-tx-0.1.0.0:PlutusTx.IsData.Instances’<span class="hljs-built_in">
+instance </span>(IsData a, IsData b, IsData c) =&gt; IsData (a, b, c)
+  -- Defined in ‘plutus-tx-0.1.0.0:PlutusTx.IsData.Instances’<span class="hljs-built_in">
+instance </span>(IsData a, IsData b) =&gt; IsData (a, b)
+  -- Defined in ‘plutus-tx-0.1.0.0:PlutusTx.IsData.Instances’<span class="hljs-built_in">
+instance </span>IsData ()
+  -- Defined in ‘plutus-tx-0.1.0.0:PlutusTx.IsData.Instances’<span class="hljs-built_in">
+instance </span>IsData a =&gt; IsData [a]
+  -- Defined in ‘PlutusTx.IsData.Class’<span class="hljs-built_in">
+instance </span>IsData Integer -- Defined in ‘PlutusTx.IsData.Class’<span class="hljs-built_in">
+instance </span>(TypeError ...) =&gt; IsData Int
+  -- Defined in ‘PlutusTx.IsData.Class’<span class="hljs-built_in">
+instance </span>IsData Data -- Defined in ‘PlutusTx.IsData.Class’
+</code></pre>
+<p>Đây vẫn là một danh sách khá ngắn về các loại có thể. Chúng tôi muốn sử
+dụng nhiều loại hơn thế này cho dữ liệu và công cụ đổi quà của chúng
+tôi.</p>
+<p>Để làm được điều này, thông thường chúng ta cần xác định một IsDatathể
+hiện cho bất kỳ kiểu nào mà chúng ta muốn sử dụng. Điều này sẽ cho phép
+chúng tôi cho trình biên dịch biết cách thực hiện chuyển đổi qua lại.
+Tuy nhiên, điều này một lần nữa sẽ rất tẻ nhạt vì nó là một quá trình
+máy móc. Vì vậy, có một cơ chế trong Plutus thực hiện điều này cho chúng
+ta.</p>
+<p>Ví dụ 5 - Các kiểu IsData tùy chỉnh
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</p>
+<p>Bây giờ chúng ta hãy nói về các kiểu dữ liệu tùy chỉnh. Hãy xác định một
+cái ngớ ngẩn và sử dụng nó trong hàm xác nhận của chúng tôi.</p>
+<pre><code class="lang-{.haskell}">newtype MySillyRedeemer = MySillyRedeemer Integer
+
+PlutusTx.unstableMakeIsData <span class="hljs-string">''</span>MySillyRedeemer
+
+{-# INLINABLE mkValidator #-}
+mkValidator :: () -&gt; MySillyRedeemer -&gt; ScriptContext -&gt; Bool
+mkValidator () (MySillyRedeemer r) _ = traceIfFalse <span class="hljs-string">"wrong redeemer"</span> $ r == <span class="hljs-number">42</span>
+</code></pre>
+<p>::: {.note}
+::: {.title}
+Note
+:::</p>
+<p>Ngoài ra còn có một phiên bản ổn định của hàm
+PlutusTx.unstableMakeIsData và phiên bản ổn định phải luôn được sử dụng
+trong mã sản xuất. Sự khác biệt giữa cả hai là, trong trường hợp yêu cầu
+Data nhiều hơn một hàm tạo, phiên bản không ổn định sẽ không đảm bảo,
+giữa các phiên bản Plutus, thứ tự của các hàm tạo sẽ được giữ nguyên.
+:::</p>
+<p>Và chúng ta cần thay đổi một số tấm boilerplate.</p>
+<pre><code class="lang-{.haskell}">data Typed<span class="hljs-built_in">
+instance </span>Scripts.ValidatorTypes Typed where
+<span class="hljs-keyword">.</span>..
+   type<span class="hljs-built_in"> instance </span>RedeemerType Typed = MySillyRedeemer
+
+typedValidator<span class="hljs-keyword"> :</span>: Scripts.TypedValidator Typed
+<span class="hljs-keyword">.</span>..
+where
+   wrap = Scripts.wrapValidator @() @MySillyRedeemer
+</code></pre>
+<p>We also need to change some off-chain code in the <code>grab</code> endpoint.</p>
+<p>Instead of using <code>I r</code>, we will use <code>toData (MySillyRedeemer r)</code>.</p>
+<pre><code class="lang-{.haskell}">grab <span class="hljs-symbol">:</span>: forall w s e. AsContractError e =&gt; Integer -&gt; Contract w s e ()
+grab r = <span class="hljs-keyword">do</span>
+    utxos &lt;- utxoAt scrAddress
+    let orefs   = fst &lt;<span class="hljs-variable">$&gt;</span> Map.toList utxos
+        lookups = Constraints.unspentOutputs utxos      &lt;&gt;
+                  Constraints.otherScript validator
+        tx <span class="hljs-symbol">:</span>: TxConstraints Void Void
+        tx      = mconcat [mustSpendScriptOutput oref <span class="hljs-variable">$ </span>Redeemer <span class="hljs-variable">$ </span>PlutusTx.toData (MySillyRedeemer r) | oref &lt;- orefs]
+    ledgerTx &lt;- submitTxConstraintsWith <span class="hljs-variable">@Void</span> lookups tx
+    void <span class="hljs-variable">$ </span>awaitTxConfirmed <span class="hljs-variable">$ </span>txId ledgerTx
+    logInfo <span class="hljs-variable">@String</span> <span class="hljs-variable">$ </span><span class="hljs-string">"collected gifts"</span>
+</code></pre>
+<p>Nếu chúng ta cố gắng biên dịch mã ngay bây giờ, trên dòng lệnh hoặc
+trong sân chơi, chúng ta sẽ gặp lỗi vì Plutus không biết cách chuyển đổi
+qua lại giữa <code>IsData</code> and <code>MySillyRedeemer</code>.</p>
+<p>Chúng tôi có thể viết một ví dụ của IsData cho MySillyRedeemer bằng tay.
+Nhưng, chúng ta không cần phải làm vậy.</p>
+<p>Thay vào đó, chúng ta có thể sử dụng một chút phép thuật của Template
+Haskell.</p>
+<pre><code class="lang-{.haskell}">PlutusTx<span class="hljs-selector-class">.unstableMakeIsData</span> <span class="hljs-string">''</span>MySillyRedeemer
+</code></pre>
+<p>Tại thời điểm biên dịch, trình biên dịch sẽ sử dụng Template Haskell để
+viết một IsDatathể hiện cho chúng ta. Và bây giờ, nó sẽ biên dịch.</p>
+<p>Hãy kiểm tra nó trong REPL.</p>
+<pre><code class="lang-{.haskell}">Prelude PlutusTx PlutusTx<span class="hljs-selector-class">.IsData</span><span class="hljs-selector-class">.Class</span>&gt; :l src/Week02/IsData<span class="hljs-selector-class">.hs</span>
+Ok, one module loaded.
+Prelude PlutusTx PlutusTx<span class="hljs-selector-class">.IsData</span><span class="hljs-selector-class">.Class</span> Week02.IsData&gt; toData (MySillyRedeemer <span class="hljs-number">42</span>)
+Constr <span class="hljs-number">0</span> [I <span class="hljs-number">42</span>]
+</code></pre>
+<p>Nếu bạn thử mã này IsData.hs, trong sân chơi, bạn sẽ thấy rằng nó hoạt
+động theo cách giống như trước đây.</p>
+<p>Tóm lược -------</p>
+<p>Chúng tôi đã thấy một vài ví dụ về trình xác nhận đơn giản.</p>
+<p>Chúng tôi đã bắt đầu với một trình xác thực sẽ luôn thành công, hoàn
+toàn bỏ qua các lập luận của nó. Sau đó, chúng tôi xem xét một trình xác
+thực luôn không thành công, một lần nữa hoàn toàn bỏ qua các đối số của
+nó. Sau đó, chúng tôi xem xét một công cụ kiểm tra người mua lại của nó
+để kiểm tra một giá trị được xác định trước nhất định.</p>
+<p>Sau đó, chúng tôi đã biến trình xác thực này thành một phiên bản đã
+nhập, phiên bản này sẽ được sử dụng trong thực tế. Đầu tiên, chúng tôi
+sử dụng các kiểu dữ liệu tích hợp và sau đó chúng tôi xem cách chúng tôi
+có thể sử dụng các kiểu dữ liệu tùy chỉnh.</p>
+<p>Chúng tôi vẫn chưa xem xét các ví dụ trong đó dữ liệu hoặc bối cảnh được
+kiểm tra, điều này sẽ được yêu cầu để có các ví dụ thực tế hơn.</p>
+<p>Chúng ta sẽ xem xét điều đó trong bài giảng tiếp theo.</p>

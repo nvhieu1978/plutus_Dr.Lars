@@ -1,0 +1,943 @@
+<h1 id="week-03-script-context">Week 03 - Script Context</h1>
+<p>::: {.note}
+::: {.title}
+Note
+:::</p>
+<p>This is a written version of <a href="https://www.youtube.com/watch?v=6_rfCCY9_gY">Lecture #3, Iteration
+#2</a>.</p>
+<p>In this lecture we learn about the script context (the third validation
+argument), handling time, and parameterized contracts.</p>
+<p>The code in this lecture uses Plutus commit
+<code>81ba78edb1d634a13371397d8c8b19829345ce0d</code>.
+:::</p>
+<h2 id="before-we-start">Before We Start</h2>
+<p>Since the last lecture there has been an update to the playground, which
+is present in the Plutus commit we are using for this lecture (see note
+above).</p>
+<p>There was an issue whereby the timeout, which was hardcoded into the
+playground was too short. This would cause simulations to fail if they
+took longer than the hardcoded timeout.</p>
+<p>There is now an option when you start the Plutus Playground Server which
+allows you to specify the timeout. The following example sets the
+timeout to 120 seconds.</p>
+<pre><code class="lang-{.}">plutus-playground-server -<span class="hljs-selector-tag">i</span> <span class="hljs-number">120s</span>
+</code></pre>
+<h2 id="recap">Recap</h2>
+<p>When we explained the (E)UTxO model in the first lecture, we mentioned
+that in order to unlock a script address, the script attached to the
+address is run, and that script gets three pieces of information - the
+<em>datum</em>, the <em>redeemer</em> and the <em>context</em>.</p>
+<p>In the second lecture, we saw examples of that, and we saw how it
+actually works in Haskell.</p>
+<p>We saw the low-level implementation, where all three arguments are
+represented by the <code>Data</code> type. We also saw that in practice this is not
+used.</p>
+<p>Instead, we use the typed version, where the datum and redeemer can be
+custom types (as long as they implement the <code>IsData</code> type class), and
+where the third argument is of type <code>ScriptContext</code>.</p>
+<p>In the examples we have seen so far we have looked at the datum and the
+redeemer, but we have always ignored the context. But the context is, of
+course, very important. So, in this lecture we will start looking at the
+context.</p>
+<h2 id="scriptcontext">ScriptContext</h2>
+<p>The <code>ScriptContext</code> type is defined in package <code>plutus-ledger-api</code>,
+which is a package that, until now, we haven\&#39;t needed. But now we do
+need it, and it is included in this week\&#39;s <code>.cabal</code> file. It is defined
+in module <code>Plutus.V1.Ledger.Contexts</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-class"><span class="hljs-keyword">data</span> <span class="hljs-type">ScriptContext</span> = <span class="hljs-type">ScriptContext</span> { 
+            <span class="hljs-title">scriptContextTxInfo</span> :: <span class="hljs-type">TxInfo</span>, 
+            <span class="hljs-title">scriptContextPurpose</span> :: <span class="hljs-type">ScriptPurpose</span> 
+      }</span>
+</code></pre>
+<p>It is a record type with two fields.</p>
+<p>The second field is of type <code>ScriptPurpose</code>, which is defined in the
+same module. It defines for which purpose a script is being run.</p>
+<pre><code class="lang-{.haskell}">data ScriptPurpose
+   = Minting CurrencySymbol
+   <span class="hljs-string">| Spending TxOutRef</span>
+   <span class="hljs-string">| Rewarding StakingCredential</span>
+   <span class="hljs-string">| Certifying DCert</span>
+</code></pre>
+<p>For us, the most important is <code>Spending</code>. This is what we have talked
+about so far in the context of the (E)UTxO model. This is when a script
+is run in order to validate a spending input for a transaction.</p>
+<p>The <code>Minting</code> purpose comes into play when you want to define a native
+token. Its purpose us to describe under which circumstances the native
+token can be minted or burned.</p>
+<p>There are also two new brand new purposes - <code>Rewarding</code> - related to
+staking and <code>Certifying</code> - related to stake delegation.</p>
+<p>The most interesting field, the one that contains the actual context, is
+<code>scriptContextTxInfo</code>, which is of type <code>TxInfo</code>, also defined in the
+same module.</p>
+<pre><code class="lang-{.haskell}">data TxInfo = TxInfo
+   { txInfoInputs      :: [TxInInfo] <span class="hljs-comment">-- ^ Transaction inputs</span>
+   , txInfoOutputs     :: [TxOut] <span class="hljs-comment">-- ^ Transaction outputs</span>
+   , txInfoFee         :: Value <span class="hljs-comment">-- ^ The fee paid by this transaction.</span>
+   , txInfoForge       :: Value <span class="hljs-comment">-- ^ The 'Value' forged by this transaction.</span>
+   , txInfoDCert       :: [DCert] <span class="hljs-comment">-- ^ Digests of certificates included in this transaction</span>
+   , txInfoWdrl        :: [(StakingCredential, Integer)] <span class="hljs-comment">-- ^ Withdrawals</span>
+   , txInfoValidRange  :: SlotRange <span class="hljs-comment">-- ^ The valid range for the transaction.</span>
+   , txInfoSignatories :: [PubKeyHash] <span class="hljs-comment">-- ^ Signatures provided with the transaction, attested that they all signed the tx</span>
+   , txInfoData        :: [(DatumHash, Datum)]
+   , txInfoId          :: TxId
+   <span class="hljs-comment">-- ^ Hash of the pending transaction (excluding witnesses)</span>
+   } deriving (<span class="hljs-keyword">Generic</span>)
+</code></pre>
+<p>It describes the spending transaction. In the (E)UTxO model, the context
+of validation is the spending transaction and its inputs and outputs.
+This context is expressed in the <code>TxInfo</code> type.</p>
+<p>There are a couple of fields that are global to the whole transaction
+and in particular we have the list of all the inputs <code>txInfoInputs</code> and
+the list of all the outputs <code>txInfoOutputs</code>. Each of those has a variety
+of fields to drill into each individual input or output.</p>
+<p>We also see fields for fees <code>txFee</code>, the forge value <code>txInfoForge</code>, used
+when minting or burning native tokens.</p>
+<p>Then we have a list of delegation certificates in <code>txInfoDCert</code> and a
+field <code>txInfoWdrl</code> to hold information about staking withdrawals.</p>
+<p>The field <code>txInfoValidRange</code>, which we will look at in much more detail
+in a moment, defines the slot range for which this transaction is valid.</p>
+<p><code>txInfoSignatories</code> is the list of public keys that have signed this
+transaction.</p>
+<p>Transactions that spend a script output need to include the datum of the
+script output. The <code>txInfoData</code> field is a list associating datums with
+their respective hashes. If there is a transaction output to a script
+address that carries some datum, you don\&#39;t need to include the datum,
+you can just include the datum hash. However, scripts that spend an
+output do need to include the datum, in which case it will be included
+in the <code>txInfoData</code> list.</p>
+<p>Finally, the <code>txInfoId</code> field is the ID of this transaction.</p>
+<h3 id="txinfovalidrange">txInfoValidRange</h3>
+<p>While there is a lot of information contained in this <code>txInfo</code> type, for
+our first example of how to use the third argument to validation, we
+will concentrate on the <code>txInfoValidRange</code> field.</p>
+<p>This brings us to an interesting dilemma. We have stressed several times
+that the big advantage that Cardano has over something like Ethereum is
+that validation can happen in the wallet. But we have also noted that a
+transaction can still fail on-chain following validation if, when the
+transaction arrives on the blockchain, it has been consumed already by
+someone else. In this case, the transaction fails without having to pay
+fees.</p>
+<p>What should never happen under normal circumstances is that a validation
+script runs and then fails. This is because you can always run the
+validation under exactly the same conditions in the wallet, so it would
+fail before you ever submit it.</p>
+<p>So that is a very nice feature, but it is not obvious how to manage time
+in that context. Time is important, because we want to be able to
+express that a certain transaction is only valid before or only valid
+after a certain time has been reached.</p>
+<p>We saw an example of this in lecture one - the auction example, where
+bids are only allowed until the deadline has been reached, and the
+<code>close</code> endpoint can only be called after the deadline has passed.</p>
+<p>That seems to be a contradiction, because time is obviously flowing. So,
+when you try to validate a transaction that you are constructing in your
+wallet, the time that you are doing that can, of course, be different
+than the time that the transaction arrives at a node for validation. So,
+it\&#39;s not clear how to bring these two together so that validation is
+deterministic, and to guarantee that if, and only if, validation
+succeeds in the wallet, it will also succeed in the node.</p>
+<p>The way Cardano solves that, is by adding the slot range field
+<code>txInfoValidRange</code> to a transaction, which essentially says \&quot;This
+transaction is valid between <em>this</em> and <em>that</em> slot\&quot;.</p>
+<p>When a transaction gets submitted to the blockchain and validated by a
+node, then before any scripts are run, some general checks are made, for
+example that all inputs are present and that the balances add up, that
+the fees are included and so on.</p>
+<p>One of those checks that happens before validation is to check that the
+slot range is valid. The node will look at the current time and check
+that it falls into the valid slot range of the transaction. If it does
+not, then validation fails immediately without ever running the
+validator scripts.</p>
+<p>So, if the pre-checks succeed, then this means that the current time
+does fall into the valid slot range. This, in turn, means that we are
+completely deterministic again. The validation script can simply assume
+that it is being run at a valid slot.</p>
+<p>By default, a script will use the infinite slot range, one that covers
+all slots starting from the genesis block and running until the end of
+time.</p>
+<p>There is one slight complication with this, and that is that Ouroboros,
+the consensus protocol powering Cardano doesn\&#39;t use POSIX time, it uses
+slots. But Plutus uses real time, so we need to be able to convert back
+and forth between real time and slots. This is no problem so long as the
+slot time is fixed. Right now it is one second, so right now it is easy.</p>
+<p>However, this could change in the future. There could be a hard fork
+with some parameter change that would change the slot time. We can\&#39;t
+know that in advance. We don\&#39;t know what the slot length will be in ten
+years, for example.</p>
+<p>That means that slot intervals that are defined for transactions
+mustn\&#39;t have a definite upper bound that is too far in the future. It
+must only be as far in the future as it is possible to know what the
+slot length will be. This happens to be something like 36 hours. We know
+that if there is going to be a hard fork, we would know about it at
+least 36 hours in advance.</p>
+<h3 id="posixtimerange">POSIXTimeRange</h3>
+<p>Let\&#39;s look at this <code>POSIXTimeRange</code> type, which is defined in
+<code>Plutus.V1.Ledger.Time</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">type</span> <span class="hljs-type">POSIXTimeRange </span>= Interval POSIXTime.
+</code></pre>
+<p>It is a type synonym for <code>Interval POSIXTime</code> and we see that <code>Interval</code>
+is defined by a <code>LowerBound</code> and an <code>UpperBound</code>.</p>
+<pre><code class="lang-{.haskell}">Interval
+      ivFrom <span class="hljs-comment">:: LowerBound a</span>
+      inTo   <span class="hljs-comment">:: UpperBound a</span>
+</code></pre>
+<p>If we drill into <code>LowerBound</code> we see the constructor</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-class"><span class="hljs-keyword">data</span> <span class="hljs-type">LowerBound</span> a = <span class="hljs-type">LowerBound</span> (<span class="hljs-type">Extended</span> <span class="hljs-title">a</span>) <span class="hljs-type">Closure</span></span>
+</code></pre>
+<p><code>Closure</code> is a synonym for <code>Bool</code> and specifies whether a bound is
+included in the <code>Interval</code> or not.</p>
+<p><code>Extended</code> can be <code>NegInf</code> for negative infinity, <code>PosInf</code> for positive
+infinity, or <code>Finite a</code>.</p>
+<p>We also find some helper functions including the <code>member</code> function which
+checks if a given <code>a</code> is part of a given <code>Interval</code>, so long as the type
+of <code>a</code> is a subtype of <code>Ord</code>, which is the case for <code>POSIXTime</code>.</p>
+<pre><code class="lang-{.haskell}">member :: Ord <span class="hljs-selector-tag">a</span> =&gt; <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Bool
+member <span class="hljs-selector-tag">a</span> <span class="hljs-selector-tag">i</span> = <span class="hljs-selector-tag">i</span> `contains` singleton a
+</code></pre>
+<p><code>interval</code> is a smart constructor for the <code>Interval</code> type which creates
+an <code>Interval</code> with an inclusive upper and lower bound.</p>
+<pre><code class="lang-{.haskell}">interval :: <span class="hljs-selector-tag">a</span> -&gt; <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span>
+interval s s<span class="hljs-string">' = Interval (lowerBound s) (upperBound s'</span>)
+</code></pre>
+<p>Then we have <code>from</code> which constructs an <code>Interval</code> which starts at <code>a</code>
+and lasts until eternity.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">from</span> :: a -&gt; Interval a
+<span class="hljs-keyword">from</span> s = Interval (lowerBound s) (UpperBound PosInf <span class="hljs-literal">True</span>)
+</code></pre>
+<p>And we have <code>to</code>, which is the opposite. It constructs an <code>Interval</code>
+starting from the genesis block up to, and including <code>a</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">to</span> <span class="hljs-type">:: a</span> -&gt; Interval a
+<span class="hljs-keyword">to</span> s = Interval (LowerBound NegInf <span class="hljs-literal">True</span>) (upperBound s)
+</code></pre>
+<p><code>always</code> is the default <code>Interval</code> which includes all times.</p>
+<pre><code class="lang-{.haskell}">always :: <span class="hljs-keyword">Interval</span> a
+always = <span class="hljs-keyword">Interval</span> (LowerBound NegInf <span class="hljs-keyword">True</span>) (UpperBound PosInf <span class="hljs-keyword">True</span>)
+</code></pre>
+<p>And we have the opposite, <code>never</code>, which contains no slots.</p>
+<pre><code class="lang-{.haskell}">never :: <span class="hljs-keyword">Interval</span> a
+never = <span class="hljs-keyword">Interval</span> (LowerBound PosInf <span class="hljs-keyword">True</span>) (UpperBound NegInf <span class="hljs-keyword">True</span>)
+</code></pre>
+<p>There is also the <code>singleton</code> helper, which constructs an interval which
+consists of just one slot.</p>
+<pre><code class="lang-{.haskell}">singleton :: <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span>
+singleton s = interval s s
+</code></pre>
+<p>The function <code>hull</code> gives the smallest interval containing both the
+given intervals.</p>
+<pre><code class="lang-{.haskell}">hull :: Ord <span class="hljs-selector-tag">a</span> =&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span>
+hull (Interval l1 h1) (Interval l2 h2) = Interval (min l1 l2) (max <span class="hljs-selector-tag">h1</span> h2)
+</code></pre>
+<p>The <code>intersection</code> function determines the largest interval that is
+contained in both the given intervals. This is an <code>Interval</code> that starts
+from the largest lower bound of the two intervals and extends until the
+smallest upper bound.</p>
+<pre><code class="lang-{.haskell}">intersection :: Ord <span class="hljs-selector-tag">a</span> =&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span>
+intersection (Interval l1 h1) (Interval l2 h2) = Interval (max l1 l2) (min <span class="hljs-selector-tag">h1</span> h2)
+</code></pre>
+<p>The <code>overlaps</code> function checks whether two intervals overlap, that is,
+whether there is a value that is a member of both intervals.</p>
+<pre><code class="lang-{.haskell}">overlaps :: Ord <span class="hljs-selector-tag">a</span> =&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Bool
+overlaps l r = isEmpty (l `intersection` r)
+</code></pre>
+<p><code>contains</code> takes two intervals and determines if the second interval is
+completely contained within the first one.</p>
+<pre><code class="lang-{.haskell}">contains :: Ord <span class="hljs-selector-tag">a</span> =&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Interval <span class="hljs-selector-tag">a</span> -&gt; Bool
+contains (Interval l1 h1) (Interval l2 h2) = l1 &lt;= l2 &amp;&amp; <span class="hljs-selector-tag">h2</span> &lt;= h1
+</code></pre>
+<p>And we have the <code>before</code> and <code>after</code> functions to determine, if a given
+time is, respectively, before or after everything in a given <code>Interval</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-built_in">before</span> :: Ord a =&gt; a -&gt; Interval a -&gt; Bool
+<span class="hljs-built_in">before</span> h (Interval f <span class="hljs-keyword">_</span>) = lowerBound h &lt; f
+
+<span class="hljs-built_in">after</span> :: Ord a =&gt; a -&gt; Interval a -&gt; Bool
+<span class="hljs-built_in">after</span> h (Interval <span class="hljs-keyword">_</span> t) = upperBound h &gt; t
+</code></pre>
+<p>Let\&#39;s have a play in the REPL.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">Week03</span><span class="hljs-selector-class">.Homework1</span>&gt; <span class="hljs-selector-tag">import</span> <span class="hljs-selector-tag">Plutus</span><span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span>
+<span class="hljs-selector-tag">Prelude</span> <span class="hljs-selector-tag">Plutus</span><span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> <span class="hljs-selector-tag">Week03</span><span class="hljs-selector-class">.Homework1</span>&gt;
+</code></pre>
+<p>Let\&#39;s construct the <code>Interval</code> between 10 and 20, inclusive.</p>
+<pre><code class="lang-{.haskell}">Prelude Plutus.V1.Ledger.<span class="hljs-keyword">Interval</span> Week03.Homework1&gt; interval (<span class="hljs-number">10</span> :: <span class="hljs-keyword">Integer</span>) <span class="hljs-number">20</span>
+<span class="hljs-keyword">Interval</span> {ivFrom = LowerBound (Finite 10) True, ivTo = UpperBound (Finite 20) True}
+</code></pre>
+<p>We can check whether a value is a member of an interval:</p>
+<pre><code class="lang-{.haskell}">Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">9</span> $ interval (<span class="hljs-number">10</span> :: Integer) <span class="hljs-number">20</span>
+False
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">10</span> $ interval (<span class="hljs-number">10</span> :: Integer) <span class="hljs-number">20</span>
+True
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">12</span> $ interval (<span class="hljs-number">10</span> :: Integer) <span class="hljs-number">20</span>
+True
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">20</span> $ interval (<span class="hljs-number">10</span> :: Integer) <span class="hljs-number">20</span>
+True
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">21</span> $ interval (<span class="hljs-number">10</span> :: Integer) <span class="hljs-number">20</span>
+False
+</code></pre>
+<p>We can use the <code>from</code> constructor. Here the lower bound is again a
+finite slot, but the upper bound is positive infinity.</p>
+<pre><code class="lang-{.haskell}">Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">21</span> $ from (<span class="hljs-number">30</span> :: Integer)
+False
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">30</span> $ from (<span class="hljs-number">30</span> :: Integer)
+True
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">300000</span> $ from (<span class="hljs-number">30</span> :: Integer)
+True
+</code></pre>
+<p>And the <code>to</code> constructor. Here the lower bound is negative infinity,
+while the upper bound is a finite slot number.</p>
+<pre><code class="lang-{.haskell}">Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">300000</span> $ to (<span class="hljs-number">30</span> :: Integer)
+False
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">31</span> $ to (<span class="hljs-number">30</span> :: Integer)
+False
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">30</span> $ to (<span class="hljs-number">30</span> :: Integer)
+True
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; member <span class="hljs-number">7</span> $ to (<span class="hljs-number">30</span> :: Integer)
+True
+</code></pre>
+<p>Now, let\&#39;s try the <code>intersection</code> function on the <code>Interval</code> from 10 to
+20 and the <code>Interval</code> from 18 to 30.</p>
+<pre><code class="lang-{.haskell}">Prelude Plutus.V1.Ledger.<span class="hljs-keyword">Interval</span> Week03.Homework1&gt; intersection (interval (<span class="hljs-number">10</span> :: <span class="hljs-keyword">Integer</span>) <span class="hljs-number">20</span>) $ interval <span class="hljs-number">18</span> <span class="hljs-number">30</span>
+<span class="hljs-keyword">Interval</span> {ivFrom = LowerBound (Finite 18) True, ivTo = UpperBound (Finite 20) True}
+</code></pre>
+<p>As expected, we get the <code>Interval</code> that runs from 18 to 20, inclusive.</p>
+<p>We can check whether one <code>Interval</code> contains another.</p>
+<pre><code class="lang-{.haskell}">Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; contains (to (<span class="hljs-number">100</span> :: Integer)) $ interval <span class="hljs-number">30</span> <span class="hljs-number">80</span>
+True
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; contains (to (<span class="hljs-number">100</span> :: Integer)) $ interval <span class="hljs-number">30</span> <span class="hljs-number">100</span>
+True
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; contains (to (<span class="hljs-number">100</span> :: Integer)) $ interval <span class="hljs-number">30</span> <span class="hljs-number">101</span>
+False
+</code></pre>
+<p>We see that as soon as the second <code>Interval</code> extends to 101, it is no
+longer fully contained within the <code>Interval</code> that runs to 100.</p>
+<p>However, if we check with <code>overlaps</code>, then it will be true because there
+are elements, such as 40, that are contained in both intervals.</p>
+<pre><code class="lang-{.haskell}">Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; overlaps (to (<span class="hljs-number">100</span> :: Integer)) $ interval <span class="hljs-number">30</span> <span class="hljs-number">101</span>
+True
+
+Prelude Plutus<span class="hljs-selector-class">.V1</span><span class="hljs-selector-class">.Ledger</span><span class="hljs-selector-class">.Interval</span> Week03.Homework1&gt; overlaps (to (<span class="hljs-number">100</span> :: Integer)) $ interval <span class="hljs-number">101</span> <span class="hljs-number">110</span>
+False
+</code></pre>
+<h2 id="example-vesting">Example - Vesting</h2>
+<p>Imagine you want to give a gift of Ada to a child. You want the child to
+own the Ada, but you only want the child to have access to it he or she
+turns eighteen.</p>
+<p>Using Plutus, it is very easy to implement. As our first contract that
+will look at the context argument, we will implement a contract that
+implements a vesting scheme. Money will be put into a script and then it
+can be retrieved by a certain person, but only once a certain deadline
+has been reached.</p>
+<p>We start by copying the <code>IsData</code> contract from lecture two into a new
+module called <code>Vesting</code>.</p>
+<p>The first step is to think about the types for the datum and redeemer.</p>
+<p>For datum, it makes sense to have two pieces of information, the
+beneficiary and the deadline. So, let\&#39;s define this type:</p>
+<pre><code class="lang-{.haskell}">data VestingDatum = <span class="hljs-keyword">VestingDatum</span>
+   { beneficiary :: PubKeyHash
+   , deadline    :: POSIXTime
+   } <span class="hljs-keyword">deriving</span> <span class="hljs-keyword">Show</span>
+
+<span class="hljs-keyword">PlutusTx</span>.unstableMakeIsData <span class="hljs-string">''</span>VestingDatum
+</code></pre>
+<p>In order to know if someone can spend this script output, two pieces
+information are required, i.e. the beneficiary\&#39;s signature and the time
+of the transaction. In this case, both those pieces of information are
+contained in the transaction itself. This means that we don\&#39;t need any
+information in the redeemer, so we can just use <code>()</code> for the redeemer.</p>
+<pre><code class="lang-{.haskell}">mkValidator :: VestingDatum<span class="hljs-function"> -&gt;</span> <span class="hljs-function"><span class="hljs-params">()</span> -&gt;</span> ScriptContext<span class="hljs-function"> -&gt;</span> Bool
+</code></pre>
+<p>We need to check two conditions.</p>
+<ol>
+<li>That only the correct beneficiary can unlock a UTxO sitting at this
+address. This we can validate by checking that the beneficiary\&#39;s
+signature is included in the transaction.</li>
+<li>That this transaction is only executed after the deadline is
+reached.</li>
+</ol>
+<p>We could probably just write this in one go, but we will write it in a
+more top-down fashion and delegate to some helper functions.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-attribute">mkValidator</span> dat () ctx =
+      mkValidator dat () ctx = traceIfFalse <span class="hljs-string">"beneficiary's signature missing"</span> signedByBeneficiary &amp;&amp;
+                               traceIfFalse <span class="hljs-string">"deadline not reached"</span> deadlineReached
+where
+      <span class="hljs-literal">info</span> :: TxInfo
+      <span class="hljs-literal">info</span> = scriptContextTxInfo ctx
+</code></pre>
+<p>To check that the transaction is signed by the beneficiary, we can get
+the public key of the beneficiary from the datum and pass it, along with
+the transaction information to the <code>txSignedBy</code> function.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-symbol">signedByBeneficiary</span> :: <span class="hljs-keyword">Bool
+</span><span class="hljs-symbol">signedByBeneficiary</span> = txSignedBy <span class="hljs-meta">info</span> $ <span class="hljs-keyword">beneficiary </span>dat
+</code></pre>
+<p>How do we check that the deadline has passed?</p>
+<p><img src="img/iteration2/pic__00046.png" alt=""></p>
+<p>Let\&#39;s consider a transaction with a validity that crosses the deadline,
+which is shown as the uppermost range in the above diagram.</p>
+<p>Recall that before the validator script is run, other checks are made,
+including the time check. The node checks that the current time falls
+into the valid range of the transaction and only then is the validator
+run. So we know that, if we are in the validator, the current time lies
+somewhere within the validity interval.</p>
+<p>In the case of the range that crosses the deadline, the validator code
+cannot know whether the current time is before or after the deadline. In
+this case, the validator must declare that the transaction is invalid.</p>
+<p>The second example in the diagram, however, is fine. We still don\&#39;t
+know what the current time is exactly, but we know that whatever the
+time is, it will be after the deadline.</p>
+<p>So, what we are checking for is that the whole validity interval is to
+the right of the deadline. One way to do this is to use the <code>contains</code>
+function to check whether the validity interval is fully contained
+within the interval that starts from the deadline and extends until the
+end of time.</p>
+<pre><code class="lang-{.haskell}">deadlineReached :: Bool
+deadlineReached = <span class="hljs-keyword">contains</span> (<span class="hljs-keyword">from</span> $ deadline dat) $ txInfoValidRange info
+</code></pre>
+<p>That completes the validation logic. Let\&#39;s take care of some
+boilerplate.</p>
+<pre><code class="lang-{.haskell}">data Vesting<span class="hljs-built_in">
+instance </span>Scripts.ValidatorTypes Vesting where
+    type<span class="hljs-built_in"> instance </span>DatumType Vesting = VestingDatum
+    type<span class="hljs-built_in"> instance </span>RedeemerType Vesting = ()
+
+typedValidator<span class="hljs-keyword"> :</span>: Scripts.TypedValidator Vesting
+typedValidator = Scripts.mkTypedValidator @Vesting
+    $$(PlutusTx.compile [|| mkValidator ||])
+    $$(PlutusTx.compile [|| wrap ||])
+  where
+    wrap = Scripts.wrapValidator @VestingDatum @()
+</code></pre>
+<p>We will focus more on the wallet part of the script later, but here are
+the changes.</p>
+<p>In addition to some new <code>LANGUAGE</code> pragmas and some extra imports, we
+have created a <code>GiveParams</code> type, and modified the <code>grab</code> endpoint to
+require no parameters.</p>
+<p>The <code>VestingSchema</code> type defines the endpoints that we want to expose to
+the user. As in our last example, <code>give</code> will be used by the user who
+puts funds into the contract, then <code>grab</code> will be used by the user
+wanting to claim the funds.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">type</span> <span class="hljs-type">VestingSchema </span>=
+   .\/ Endpoint <span class="hljs-string">"give"</span> GiveParams
+   .\/ Endpoint <span class="hljs-string">"grab"</span> ()
+</code></pre>
+<p>So what parameters do we need for <code>give</code>? The endpoint will create a
+UTxO at the vesting script address with an amount and a datum. If you
+recall, our datum contains the beneficiary and the deadline. So, there
+are three pieces of information that we must pass to the <code>give</code>
+endpoint.</p>
+<pre><code class="lang-{.haskell}">data GiveParams = GiveParams
+   { gpBeneficiary <span class="hljs-type">::</span> !PubKeyHash
+   , gpDeadline    <span class="hljs-type">::</span> !POSIXTime
+   , gpAmount      <span class="hljs-type">::</span> !<span class="hljs-built_in">Integer</span>
+   } deriving (Generic, ToJSON, FromJSON, ToSchema)
+</code></pre>
+<p>The <code>grab</code> endpoint doesn\&#39;t require any parameters because the
+beneficiary will just look for UTxOs sitting at the script address and
+can then check whether they are the beneficiary and whether the deadline
+has passed. If so, they can consume them.</p>
+<p>Let\&#39;s quickly look at the <code>give</code> endpoint.</p>
+<pre><code class="lang-{.haskell}">give :: AsContractError e =&gt; GiveParams -&gt; Contract w s e ()
+give <span class="hljs-built_in">gp</span> = do
+    let dat = VestingDatum
+                { <span class="hljs-keyword">beneficiary </span>= gpBeneficiary <span class="hljs-built_in">gp</span>
+                , deadline    = gpDeadline <span class="hljs-built_in">gp</span>
+                }
+        tx  = mustPayToTheScript dat $ Ada.lovelaceValueOf $ gpAmount <span class="hljs-built_in">gp</span>
+    ledgerTx &lt;- <span class="hljs-keyword">submitTxConstraints </span>typedValidator tx
+    void $ awaitTxConfirmed $ txId ledgerTx
+    logInfo @String $ printf <span class="hljs-string">"made a gift of %d lovelace to %s with deadline %s"</span>
+        (gpAmount <span class="hljs-built_in">gp</span>)
+        (<span class="hljs-keyword">show </span>$ gpBeneficiary <span class="hljs-built_in">gp</span>)
+        (<span class="hljs-keyword">show </span>$ gpDeadline <span class="hljs-built_in">gp</span>)
+</code></pre>
+<p>First we compute the datum we want to use, and we can get both pieces of
+information from the <code>GiveParams</code> which is passed into the function.</p>
+<p>Then, for the transaction, we add a constraint that there must be an
+output at this script address with the datum that we just defined and a
+certain number of lovelace, which we also get from the <code>GiveParams</code>.</p>
+<p>The rest of the function is as before, just with a different log
+message.</p>
+<p>The <code>grab</code> endpoint is a bit more involved.</p>
+<p>There can be many UTxOs at this script address and some of them might
+not be suitable for us, either because we are not the beneficiary, or
+because the deadline has not yet passed. If we try to submit a
+transaction when there are no suitable UTxOs, we will pay fees, but get
+nothing in return.</p>
+<pre><code class="lang-{.haskell}">grab :: forall w s e. AsContractError e =&gt; Contract w s e ()
+grab = do
+    now   &lt;- currentTime
+    pkh   &lt;- pubKeyHash &lt;$&gt; ownPubKey
+    utxos &lt;- Map.filter (isSuitable pkh now) &lt;$&gt; utxoAt scrAddress
+    <span class="hljs-keyword">if</span> Map.null utxos
+        then logInfo @String $ <span class="hljs-string">"no gifts available"</span>
+        else do
+            <span class="hljs-keyword">let</span> orefs   = fst &lt;$&gt; Map.toList utxos
+                lookups = Constraints.unspentOutputs utxos  &lt;&gt;
+                          Constraints.otherScript validator
+                tx :: TxConstraints Void Void
+                tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ PlutusTx.toData () | oref &lt;- orefs] &lt;&gt;
+                          mustValidateIn (<span class="hljs-keyword">from</span> now)
+            ledgerTx &lt;- submitTxConstraintsWith @Void lookups tx
+            void $ awaitTxConfirmed $ txId ledgerTx
+            logInfo @String $ <span class="hljs-string">"collected gifts"</span>
+  <span class="hljs-keyword">where</span>
+    isSuitable :: PubKeyHash -&gt; POSIXTime -&gt; TxOutTx -&gt; Bool
+    isSuitable pkh now o = <span class="hljs-keyword">case</span> txOutDatumHash $ txOutTxOut o <span class="hljs-keyword">of</span>
+        Nothing -&gt; <span class="hljs-literal">False</span>
+        Just h  -&gt; <span class="hljs-keyword">case</span> Map.lookup h $ txData $ txOutTxTx o <span class="hljs-keyword">of</span>
+            Nothing        -&gt; <span class="hljs-literal">False</span>
+            Just (Datum e) -&gt; <span class="hljs-keyword">case</span> PlutusTx.fromData e <span class="hljs-keyword">of</span>
+                Nothing -&gt; <span class="hljs-literal">False</span>
+                Just d  -&gt; beneficiary d == pkh &amp;&amp; deadline d &lt;= now
+</code></pre>
+<p>First, we get the current time and calculate our public key hash. We
+then look up all the UTxOs at this address and filter them using the
+<code>isSuitable</code> helper function, which is defined in the <code>where</code> clause.</p>
+<p>It first checks the datum hash, and, if it finds it, it attempts to look
+up the corresponding datum. Recall that the producing transaction, in
+this case <code>give</code> doesn\&#39;t have to supply the datum, it need only supply
+the datum hash. However, in our case we need to have the datum available
+to the <code>grab</code> endpoint, so the <code>give</code> endpoint does provide the datum.</p>
+<p>If the <code>grab</code> endpoint finds the datum, it must deserialise it to the
+<code>Vesting</code> type.</p>
+<p>If all of this succeeds we can check whether we are the beneficiary and
+whether the deadline has passed.</p>
+<p>At this point, <code>utxos</code> contains all the UTxOs that we can consume. If we
+find none, then we just log a message to that effect. If there is at
+least one, then we construct one transaction that consumes all of them
+as inputs and pays the funds to our wallet.</p>
+<p>As <code>lookups</code>, we provide the list of UTxOs as well as the validator
+script. Recall that, in order to consume UTxOs at this address, the
+spending transaction must provide the validation script.</p>
+<p>We then create a transaction that spends all the suitable UTxOs along
+with a constraint that it must validate in the <code>Interval</code> which
+stretches from now until the end of time. If we don\&#39;t provide the
+interval here, then validation will fail, because the default interval
+is from genesis until the end of time. The on-chain validation would
+reject this as it needs an interval that is fully contained in the
+interval stretching from the deadline until the end of time.</p>
+<p>We could use the singleton <code>Interval</code> <code>now</code>, but, if there were any
+issues, for example network delays, and the transaction arrived at a
+node a slot or two later, then validation would no longer work.</p>
+<p>The, we just bundle up the endpoints.</p>
+<pre><code class="lang-{.haskell}">endpoints <span class="hljs-symbol">:</span>: Contract () VestingSchema Text ()
+endpoints = (give<span class="hljs-string">' `select` grab'</span>) <span class="hljs-meta">&gt;&gt; </span>endpoints
+  where
+    give<span class="hljs-string">' = endpoint @"give" &gt;&gt;= give
+    grab'</span> = endpoint @<span class="hljs-string">"grab"</span> <span class="hljs-meta">&gt;&gt;  </span>grab
+</code></pre>
+<p>Then there is some boilerplate which is just used in the playground.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-attribute">mkSchemaDefinitions</span> <span class="hljs-string">''</span>VestingSchema
+
+mkKnownCurrencies []
+</code></pre>
+<h3 id="in-the-playground">In the playground</h3>
+<p>First, let\&#39;s add a third wallet. We are going to create a scenario
+where Wallet 1 makes two gifts to Wallet 2 with different deadlines and
+also makes one gift to Wallet 3.</p>
+<p><img src="img/iteration2/pic__00043.png" alt=""></p>
+<p>Normally it would be possible to submit both <code>give</code> transactions in the
+same slot, but the way our code is implemented, we wait for
+confirmation, which means we need to add a wait action. This is maybe
+not the best way to do it, but that\&#39;s how it is for the time being.</p>
+<p><img src="img/iteration2/pic__00044.png" alt=""></p>
+<p>Here we run into our first problem. We need to supply the beneficiary
+address, but there is no way in the playground to get the public key
+hash of a wallet.</p>
+<p>But we can get it from the REPL.</p>
+<pre><code class="lang-{.haskell}">Prelude Week03.Homework1&gt; :l src/Week03/Vesting<span class="hljs-selector-class">.hs</span> 
+Ok, one module loaded.
+Prelude Week03.Vesting&gt; import Ledger
+Prelude Ledger Week03.Vesting&gt; import Wallet<span class="hljs-selector-class">.Emulator</span>
+Prelude Ledger Wallet<span class="hljs-selector-class">.Emulator</span> Week03.Vesting&gt; pubKeyHash $ walletPubKey $ Wallet <span class="hljs-number">2</span>
+<span class="hljs-number">39</span>f713d0a644253f04529421b9f51b9b08979d08295959c4f3990ee617f5139f
+Prelude Ledger Wallet<span class="hljs-selector-class">.Emulator</span> Week03.Vesting&gt; pubKeyHash $ walletPubKey $ Wallet <span class="hljs-number">3</span>
+dac073e0123bdea59dd9b3bda9cf6037f63aca82627d7abcd5c4ac29dd74003e
+</code></pre>
+<p><img src="img/iteration2/pic__00047.png" alt=""></p>
+<p>The next problem is the deadline. In the last lecture we saw how to
+convert between slots and POSIX times. This has changed. Previously you
+just needed a slot and out came a POSIX time. Now there is a second
+argument.</p>
+<pre><code class="lang-{.haskell}">Prelude Ledger Wallet<span class="hljs-selector-class">.Emulator</span> Week03.Vesting&gt; import Ledger<span class="hljs-selector-class">.TimeSlot</span> 
+Prelude Ledger Wallet<span class="hljs-selector-class">.Emulator</span> Ledger<span class="hljs-selector-class">.TimeSlot</span> Week03.Vesting&gt; :t slotToBeginPOSIXTime
+slotToBeginPOSIXTime :: SlotConfig -&gt; Slot -&gt; POSIXTime
+</code></pre>
+<p>There are also versions of <code>slotToBeginPOSIXTime</code> that have a begin and
+an end time. This is because a slot is not just a point in time, it\&#39;s a
+duration in time.</p>
+<p>So what is this <code>SlotConfig</code>?</p>
+<pre><code class="lang-{.haskell}">Prelude Ledger Wallet.Emulator Ledger.TimeSlot Week03.Vesting&gt;<span class="hljs-keyword"> :i</span> SlotConfig 
+type SlotConfig<span class="hljs-keyword"> :</span>: *
+data SlotConfig
+  = SlotConfig {scSlotLength<span class="hljs-keyword"> :</span>: Integer, scZeroSlotTime<span class="hljs-keyword"> :</span>: POSIXTime}
+        -- Defined in ‘Ledger.TimeSlot’<span class="hljs-built_in">
+instance </span>Eq SlotConfig -- Defined in ‘Ledger.TimeSlot’<span class="hljs-built_in">
+instance </span>Show SlotConfig -- Defined in ‘Ledger.TimeSlot’
+</code></pre>
+<p>It takes the slot length and the time at which slot zero starts.</p>
+<p>So now we have to find out what <code>SlotConfig</code> to use for the playground.
+Luckily, it\&#39;s the default. For that we need to use the <code>Data.Default</code>
+module.</p>
+<pre><code class="lang-{.haskell}">Prelude Ledger Wallet.Emulator Ledger.TimeSlot Week03.Vesting&gt; <span class="hljs-keyword">import</span> <span class="hljs-keyword">Data</span>.<span class="hljs-keyword">Default</span>
+Prelude Ledger Wallet.Emulator Ledger.TimeSlot <span class="hljs-keyword">Data</span>.<span class="hljs-keyword">Default</span> Week03.Vesting&gt; def :: SlotConfig
+SlotConfig {scSlotLength = <span class="hljs-number">1000</span>, scZeroSlotTime = POSIXTime {getPOSIXTime = <span class="hljs-number">1596059091000</span>}}
+</code></pre>
+<p>Now we can use <code>slotToBeginPOSIXTime</code> with the default config to get the
+POSIX time for slot 10 and slot 20.</p>
+<pre><code class="lang-{.haskell}">Prelude Ledger Wallet.Emulator Ledger.TimeSlot Data.Default Week03.Vesting&gt; slotToBeginPOSIXTime def 10
+<span class="hljs-keyword">POSIXTime</span> {getPOSIXTime = <span class="hljs-number">1596059101000</span>}
+
+<span class="hljs-keyword">Prelude</span> <span class="hljs-keyword">Ledger</span> <span class="hljs-keyword">Wallet</span>.Emulator Ledger.TimeSlot Data.Default Week03.Vesting&gt; slotToBeginPOSIXTime def 20
+<span class="hljs-keyword">POSIXTime</span> {getPOSIXTime = <span class="hljs-number">1596059111000</span>}
+</code></pre>
+<p>And we can use these in the playground. We\&#39;ll use slot 10 as the
+deadline for the first and third <code>give</code>s and slot 20 for the second
+<code>give</code>. We\&#39;ll also give 10 Ada in each case.</p>
+<p><img src="img/iteration2/pic__00048.png" alt=""></p>
+<p>Let\&#39;s create a scenario where everything works. Wallet 3 grabs at slot
+10 when the deadline for Wallet 3 has passed, and Wallet 2 grabs at slot
+20, when both the Wallet 2 deadlines have passed. We will use the
+<code>Wait Until..</code> option for this.</p>
+<p><img src="img/iteration2/pic__00049.png" alt=""></p>
+<p>After evaluation, we first see the Genesis transaction.</p>
+<p><img src="img/iteration2/pic__00050.png" alt=""></p>
+<p>If we look at the next transaction, we see the gift from Wallet 1 to
+Wallet 2 with the deadline of 10. Here, ten Ada get locked in the script
+address.</p>
+<p><img src="img/iteration2/pic__00051.png" alt=""></p>
+<p>The next transaction is the gift from Wallet 1 to Wallet 2 with the
+deadline of 20. A new UTxO is now created at the script address with ten
+Ada.</p>
+<p><img src="img/iteration2/pic__00052.png" alt=""></p>
+<p>And the third gift, this time to Wallet 3, with a deadline of 10. Wallet
+1 now has about 70 Ada, and another UTxO is created with 10 Ada locked
+at the script address.</p>
+<p><img src="img/iteration2/pic__00053.png" alt=""></p>
+<p>At slot 10, Wallet 3 grabs successfully. The third UTxO is the input,
+some fees are paid, and then the remainder of the lovelace is sent to
+Wallet 3.</p>
+<p><img src="img/iteration2/pic__00054.png" alt=""></p>
+<p>Then at slot 20, Wallet 2 successfully grabs both the UTxOs for which
+they are the beneficiary. This time the fee is higher because two
+validators have to run.</p>
+<p><img src="img/iteration2/pic__00055.png" alt=""></p>
+<p>The final balances reflect the changes.</p>
+<p><img src="img/iteration2/pic__00056.png" alt=""></p>
+<p>Now let\&#39;s look at the case where the grab happens too early. We\&#39;ll
+make Wallet 2 grab at slot 15 instead of slot 20.</p>
+<p><img src="img/iteration2/pic__00010.png" alt=""></p>
+<p>Now we see that the first transactions are the same, but that the final
+transaction at slot 15 has only one input, because the second UTxO is
+not yet available.</p>
+<p><img src="img/iteration2/pic__00057.png" alt=""></p>
+<p>And we can see that there are 10 Ada still locked at the script address.</p>
+<p><img src="img/iteration2/pic__00057.png" alt=""></p>
+<p>Our off-chain code was written in such a way that it will only submit a
+transaction if there is a suitable UTxO that can be grabbed. This means
+that we don\&#39;t really exercise the validator because we are only sending
+transactions to the blockchain that will pass validation.</p>
+<p>If you want to test the validator, you could modify the wallet code so
+that the grab endpoint attempts to grab everything and then validation
+will fail if you are not the beneficiary or the deadline has not been
+reached.</p>
+<p>You need to keep in mind that anybody can write off-chain code. So, even
+though it works now as long as you use the <code>grab</code> endpoint that we wrote
+ourselves, somebody could write a different piece of off-chain code that
+doesn\&#39;t filter the UTxOs as we did. In this case, if the validator is
+not correct something could be horribly wrong.</p>
+<h2 id="example-2-parameterized-contract">Example 2 - Parameterized Contract</h2>
+<p>We\&#39;ll start the next example by copying the code from the vesting
+example into a new module called <code>Week03.Parameterized</code>.</p>
+<h3 id="on-chain">On-Chain</h3>
+<p>Note that in the vesting example we used the <code>Vesting</code> type as the
+datum, but it was just fixed, it didn\&#39;t change. Alternatively, we could
+have baked it into the contract, so to speak, so that we have a contract
+where the script itself already contains the beneficiary and deadline
+information.</p>
+<p>All the examples of contracts we have seen so far were fixed. We used a
+<code>TypedValidator</code> as a compile-time constant. The idea of parameterized
+scripts is that you can have a parameter and, depending on the value of
+the parameter, you get different values of <code>TypedValidator</code>.</p>
+<p>So, instead of defining one script, with a single script address, with
+all UTxOs sitting at the same address, you can define a family of
+scripts that are parameterized by a given parameter. In our case, this
+will mean that UTxOs for different beneficiaries and/or deadlines will
+be a different script addresses, as they will have parameterized
+validators specific to their parameters rather than specific to the
+datum of the UTxO.</p>
+<p>We are going to demonstrate how to do this by, instead of using datum
+for the beneficiary and deadline values, using a parameter.</p>
+<p>Let\&#39;s start by renaming <code>VestingDatum</code> to something more suitable.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-class"><span class="hljs-keyword">data</span> <span class="hljs-type">VestingParam</span> = <span class="hljs-type">VestingParam</span></span>
+      { beneficiary :: <span class="hljs-type">PubKeyHash</span>
+      , deadline    :: <span class="hljs-type">POSIXTime</span>
+      } <span class="hljs-keyword">deriving</span> <span class="hljs-type">Show</span>
+</code></pre>
+<p>We will also remove the <code>unstableMakeIsData</code> call as we don\&#39;t need this
+anymore.</p>
+<p>The reason we don\&#39;t need it, is because we are just going to use <code>()</code>
+for the datum in the <code>mkValidator</code> function. All the information we
+require will be in a new argument to <code>mkValidator</code>, of type
+<code>VestingParam</code>, which we add at the beginning of the list of arguments.</p>
+<pre><code class="lang-{.haskell}">{-# INLINABLE mkValidator #-}
+mkValidator :: VestingParam -&gt; () -&gt; () -&gt; ScriptContext -&gt; Bool
+mkValidator p () () ctx = traceIfFalse <span class="hljs-string">"beneficiary's signature missing"</span> signedByBeneficiary &amp;&amp;
+                          traceIfFalse <span class="hljs-string">"deadline not reached"</span> deadlineReached
+  <span class="hljs-keyword">where</span>
+    info :: TxInfo
+    info = scriptContextTxInfo ctx
+
+    signedByBeneficiary :: Bool
+    signedByBeneficiary = txSignedBy info $ beneficiary p
+
+    deadlineReached :: Bool
+    deadlineReached = contains (<span class="hljs-keyword">from</span> $ deadline p) $ txInfoValidRange info
+</code></pre>
+<p>We also change the <code>Vesting</code> type to reflect the change to the datum.</p>
+<pre><code class="lang-{.haskell}">data Vesting<span class="hljs-built_in">
+instance </span>Scripts.ValidatorTypes Vesting where
+    type<span class="hljs-built_in"> instance </span>DatumType Vesting = ()
+    type<span class="hljs-built_in"> instance </span>RedeemerType Vesting = ()
+</code></pre>
+<p>Now, the <code>TypedValidator</code> will no longer be a constant value. Instead it
+will take a parameter.</p>
+<p>Recall that the function <code>mkTypedValidator</code> requires as its first
+argument the compiled code of a function that takes three arguments and
+returns a <code>Bool</code>. But now, it has four arguments, so we need to account
+for that.</p>
+<pre><code class="lang-{.haskell}">typedValidator :: VestingParam -&gt; Scripts<span class="hljs-selector-class">.TypedValidator</span> Vesting
+typedValidator <span class="hljs-selector-tag">p</span> = Scripts<span class="hljs-selector-class">.mkTypedValidator</span> @Vesting
+</code></pre>
+<p>Now, what we would like to do is something like this, passing in the new
+parameter <code>p</code> to <code>mkValidator</code> so that the compiled code within the
+Oxford brackets would have the correct type.</p>
+<pre><code class="lang-{.haskell}">-- this won't work
+$$(PlutusTx.compile [|<span class="hljs-type">| mkValidator</span> p |<span class="hljs-type">|])
+$$(PlutusTx</span>.compile [|<span class="hljs-type">| wrap</span> |<span class="hljs-type">|])
+where</span>
+wrap = Scripts.wrapValidator @() @()
+</code></pre>
+<p>This code will not work, but before we investigate, let\&#39;s leave the
+code as it is for now and make some more changes to the rest of the
+code.</p>
+<p><code>validator</code> now will take a <code>VestingParam</code> and will return a composed
+function. The returned function has the effect that any paramater passed
+to <code>validator</code> would now effectively get passed to the <code>typedValidator</code>
+function, whose return value would in turned get passed to the
+<code>validatorScript</code> function.</p>
+<pre><code class="lang-{.haskell}">validator :: VestingParam -&gt; Validator
+validator = Scripts.validatorScript . typedValidator
+</code></pre>
+<p>And the same for <code>valHash</code> and <code>scrAddress</code>.</p>
+<pre><code class="lang-{.haskell}">valHash :: VestingParam -&gt; Ledger<span class="hljs-selector-class">.ValidatorHash</span>
+valHash = Scripts<span class="hljs-selector-class">.validatorHash</span> . typedValidator
+
+scrAddress :: VestingParam -&gt; Ledger<span class="hljs-selector-class">.Address</span>
+scrAddress = scriptAddress . validator
+</code></pre>
+<p>Now, let\&#39;s find out what\&#39;s wrong with out <code>typedValidator</code> function.</p>
+<p>If we try to launch the REPL, we get a compile error.</p>
+<pre><code class="lang-{.haskell}">GHC Core to PLC plugin: E043:Error: Reference to <span class="hljs-selector-tag">a</span> name which is not <span class="hljs-selector-tag">a</span> local, <span class="hljs-selector-tag">a</span> builtin, or an external INLINABLE function: Variable <span class="hljs-selector-tag">p</span>
+No unfolding
+Context: Compiling expr: <span class="hljs-selector-tag">p</span>
+Context: Compiling expr: Week03<span class="hljs-selector-class">.Parameterized</span><span class="hljs-selector-class">.mkValidator</span> <span class="hljs-selector-tag">p</span>
+Context: Compiling expr at <span class="hljs-string">"plutus-pioneer-program-week03-0.1.0.0-inplace:Week03.Parameterized:(67,10)-(67,48)"</span>
+</code></pre>
+<p>The problem is this line.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-comment">-- this won't work</span>
+$$(PlutusTx.compile [|| mkValidator p ||])
+</code></pre>
+<p>Recall that everything inside the Oxford brackets must be explicitly
+known at compile time. Normally it would even need all the code to be
+written explicitly, but by using the <code>INLINABLE</code> pragma on the
+<code>mkValidator</code> function we can reference the function instead. However,
+it must still be known at compile time, because that\&#39;s how Template
+Haskell works - it is executed before the main compiler.</p>
+<p>The <code>p</code> is not known at compile time, because we intend to supply it at
+runtime. Luckily there is a way around this.</p>
+<p>On the Haskell side, we have our <code>mkValidator</code> function and we have <code>p</code>
+of type <code>VestingParam</code>. We can compile <code>mkValidator</code> to Plutus, but we
+can\&#39;t compile <code>p</code> to Plutus because we don\&#39;t know what it is. But, if
+we could get our hands on the compiled version of <code>p</code>, we could apply
+this compiled version to the compiled <code>mkValidator</code>, and this would give
+us what we want.</p>
+<p>This seems to solve nothing, because we still need a compiled version of
+<code>p</code> and we have the same problem that <code>p</code> is not known at compile time.</p>
+<p>However, <code>p</code> is not some arbitrary Haskell code, it\&#39;s data, so it
+doesn\&#39;t contain any function types. If we make the type of <code>p</code> an
+instance of a type class called <code>Lift</code>. We can use <code>liftCode</code> to compile
+<code>p</code> at runtime to Plutus Core and then, using <code>applyCode</code> we can apply
+the Plutus Core <code>p</code> to the Plutus Core <code>mkValidator</code>.</p>
+<h4 id="the-lift-class">The Lift Class</h4>
+<p>Let\&#39;s briefly look at the <code>Lift</code> class. It is defined in package
+<code>plutus-tx</code>.</p>
+<pre><code class="lang-{.haskell}">module PlutusTx<span class="hljs-selector-class">.Lift</span><span class="hljs-selector-class">.Class</span>
+</code></pre>
+<p>It only has one function, <code>Lift</code>. However, we won\&#39;t use this function
+directly.</p>
+<p>The importance of the class is that it allows us to, at runtime, lift
+Haskell values into corresponding Plutus script values. And this is
+exactly what we need to convert our parameter <code>p</code> into code.</p>
+<p>We will use a different function, defined in the same package but in a
+different module.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">PlutusTx</span>.<span class="hljs-title">Lift</span></span>
+</code></pre>
+<p>The function we will use is called <code>liftCode</code>.</p>
+<pre><code class="lang-{.haskell}">-- | Get a Plutus Core program corresponding to the given value <span class="hljs-keyword">as</span> a <span class="hljs-string">'CompiledCodeIn'</span>, throwing any errors that occur <span class="hljs-keyword">as</span> exceptions and ignoring fresh names.
+liftCode
+   :: (Lift.Lift uni a, Throwable uni <span class="hljs-function"><span class="hljs-keyword">fun</span>, <span class="hljs-title">PLC</span></span>.ToBuiltinMeaning uni <span class="hljs-function"><span class="hljs-keyword">fun</span>)
+   =<span class="hljs-title">&gt;</span></span> a -&gt; CompiledCodeIn uni <span class="hljs-function"><span class="hljs-keyword">fun</span> <span class="hljs-title">a</span></span>
+liftCode x = unsafely $ safeLiftCode x
+</code></pre>
+<p>It takes a Haskell value of type <code>a</code>, provided <code>a</code> is an instance of the
+<code>Lift</code> class, and turns it into a piece of Plutus script code
+corresponding to the same type.</p>
+<p>Now we can fix our validator.</p>
+<pre><code class="lang-{.haskell}">typedValidator <span class="hljs-symbol">:</span>: VestingParam -&gt; Scripts.TypedValidator Vesting
+typedValidator p = Scripts.mkTypedValidator @Vesting
+    ($$(PlutusTx.compile [<span class="hljs-params">||</span> mkValidator <span class="hljs-params">||</span>]) <span class="hljs-string">`PlutusTx.applyCode`</span> PlutusTx.liftCode p)
+    $$(PlutusTx.compile [<span class="hljs-params">||</span> wrap <span class="hljs-params">||</span>])
+  where
+    wrap = Scripts.wrapValidator @() @()
+</code></pre>
+<p>This code is fine, but it won\&#39;t yet compile, because <code>VestingParam</code> is
+not an instance of <code>Lift</code>. To fix this, we can use <code>makeLift</code>.</p>
+<pre><code class="lang-{.haskell}">PlutusTx<span class="hljs-selector-class">.makeLift</span> <span class="hljs-string">''</span>VestingParam
+</code></pre>
+<p>And, we need to enable a GHC extension.</p>
+<pre><code class="lang-{.haskell}">{-# LANGUAGE MultiParamTypeClasses #-}
+</code></pre>
+<p>Now it will compile.</p>
+<h3 id="off-chain">Off-Chain</h3>
+<p>The off-chain code hasn\&#39;t changed much.</p>
+<p>The <code>GiveParams</code> are still the same.</p>
+<pre><code class="lang-{.haskell}">data GiveParams = GiveParams
+      { gpBeneficiary <span class="hljs-type">::</span> !PubKeyHash
+      , gpDeadline    <span class="hljs-type">::</span> !POSIXTime
+      , gpAmount      <span class="hljs-type">::</span> !<span class="hljs-built_in">Integer</span>
+      } deriving (Generic, ToJSON, FromJSON, ToSchema)
+</code></pre>
+<p><code>VestingSchema</code> has slightly changed because the <code>grab</code> endpoint now
+relies on knowing the beneficiary and deadline in order to know
+determine the script address. We know the beneficiary because it will be
+the public key hash of the wallet that calls <code>grab</code>, but we don\&#39;t know
+the deadline, so we must pass it to <code>grab</code>.</p>
+<pre><code class="lang-{.haskell}"><span class="hljs-keyword">type</span> <span class="hljs-type">VestingSchema </span>=
+          Endpoint <span class="hljs-string">"give"</span> GiveParams
+      .\/ Endpoint <span class="hljs-string">"grab"</span> POSIXTime
+</code></pre>
+<p>The <code>give</code> endpoint is similar to the vesting example, but there are
+some differences.</p>
+<p>Instead of computing the datum, we will construct something of type
+<code>VestingParam</code>. We also change the reference to the datum in
+<code>mustPayToTheScript</code> to become <code>()</code>, and we provide the type <code>p</code> to
+<code>typedValidator</code> as it is no longer a constant.</p>
+<pre><code class="lang-{.haskell}">give :: AsContractError e =&gt; GiveParams -&gt; Contract w s e ()
+give <span class="hljs-built_in">gp</span> = do
+    let p  = VestingParam
+                { <span class="hljs-keyword">beneficiary </span>= gpBeneficiary <span class="hljs-built_in">gp</span>
+                , deadline    = gpDeadline <span class="hljs-built_in">gp</span>
+                }
+        tx = mustPayToTheScript () $ Ada.lovelaceValueOf $ gpAmount <span class="hljs-built_in">gp</span>
+    ledgerTx &lt;- <span class="hljs-keyword">submitTxConstraints </span>(typedValidator p) tx
+    void $ awaitTxConfirmed $ txId ledgerTx
+    logInfo @String $ printf <span class="hljs-string">"made a gift of %d lovelace to %s with deadline %s"</span>
+        (gpAmount <span class="hljs-built_in">gp</span>)
+        (<span class="hljs-keyword">show </span>$ gpBeneficiary <span class="hljs-built_in">gp</span>)
+        (<span class="hljs-keyword">show </span>$ gpDeadline <span class="hljs-built_in">gp</span>)
+</code></pre>
+<p>In the <code>grab</code> endpoint, there are also some changes.</p>
+<p>Recall that earlier we got all the UTxOs sitting at this one script
+address and that they could be for arbitrary beneficiaries and for
+arbitrary deadlines. For this reason, we had to filter those UTxOs which
+were for us and where the deadline had been reached.</p>
+<p>We now have the additional parameter, which we\&#39;ll call <code>d</code>, which
+represents the deadline. So we can immediately see if the deadline has
+been reached or not.</p>
+<p>If it has not been reached, we write a log message and stop, otherwise
+we continue and construct the <code>VestingParam</code>.</p>
+<p>Then, we look up the UTxOs that are sitting at this address. Address is
+not a constant anymore, it takes a parameter. So, now, we will only get
+UTxOs which are for us and that have a deadline that has been reached.
+We don\&#39;t need to filter anything.</p>
+<p>If there are none, we log a message to that effect and stop, otherwise
+we do more or less what we did before.</p>
+<pre><code class="lang-{.haskell}">grab d = <span class="hljs-keyword">do</span>
+<span class="hljs-keyword">now</span>   &lt;- currentTime
+pkh   &lt;- pubKeyHash &lt;$&gt; ownPubKey
+<span class="hljs-keyword">if</span> <span class="hljs-keyword">now</span> &lt; d
+    <span class="hljs-keyword">then</span> logInfo @<span class="hljs-keyword">String</span> $ <span class="hljs-string">"too early"</span>
+    <span class="hljs-keyword">else</span> <span class="hljs-keyword">do</span>
+        let p = VestingParam
+                    { beneficiary = pkh
+                    , deadline    = d
+                    }
+                    utxos &lt;- utxoAt $ scrAddress p
+                    <span class="hljs-keyword">if</span> Map.null utxos
+                        <span class="hljs-keyword">then</span> logInfo @<span class="hljs-keyword">String</span> $ <span class="hljs-string">"no gifts available"</span>
+                        <span class="hljs-keyword">else</span> <span class="hljs-keyword">do</span>
+                            let orefs   = fst &lt;$&gt; Map.toList utxos
+                                lookups = Constraints.unspentOutputs utxos      &lt;&gt;
+                                          Constraints.otherScript (validator p)
+                                tx :: TxConstraints <span class="hljs-built_in">Void</span> <span class="hljs-built_in">Void</span>
+                                tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ PlutusTx.toData () | oref &lt;- orefs] &lt;&gt;
+                                          mustValidateIn (<span class="hljs-keyword">from</span> <span class="hljs-keyword">now</span>)
+                            ledgerTx &lt;- submitTxConstraintsWith @<span class="hljs-built_in">Void</span> lookups tx
+                            <span class="hljs-built_in">void</span> $ awaitTxConfirmed $ txId ledgerTx
+                            logInfo @<span class="hljs-keyword">String</span> $ <span class="hljs-string">"collected gifts"</span>
+</code></pre>
+<p>The <code>endpoints</code> function is slightly different due to the new parameter
+for <code>grab</code>.</p>
+<pre><code class="lang-{.haskell}">endpoints <span class="hljs-symbol">:</span>: Contract () VestingSchema Text ()
+endpoints = (give<span class="hljs-string">' `select` grab'</span>) <span class="hljs-meta">&gt;&gt; </span>endpoints
+  where
+    give<span class="hljs-string">' = endpoint @"give" &gt;&gt;= give
+    grab'</span> = endpoint @<span class="hljs-string">"grab"</span> <span class="hljs-meta">&gt;&gt;= </span>grab
+</code></pre>
+<h3 id="back-to-the-playground">Back to the playground</h3>
+<p>We will now copy and paste this new contract into the playground and
+setup a new scenario.</p>
+<p>The <code>give</code> transactions are the same.</p>
+<p><img src="img/iteration2/pic__00059.png" alt=""></p>
+<p>The <code>grab</code> is slightly different. In our earlier implementation, one
+wallet could grab UTxOs with different deadlines provided that the
+deadlines had passed. Now the deadline is part of the script parameter,
+so we need to specify it in order to get the script address. This means
+that Wallet 2 cannot grab the gifts for slots 10 and 20 at the same
+time, at least not in the way that we have implemented it.</p>
+<p>First we can wait until slot 10 and then Wallet 2 should be able to grab
+its first gift and Wallet 3 should be able to claim its single gift.</p>
+<p>We\&#39;ll add a <code>grab</code> for Wallets 2 and 3. Here, we don\&#39;t need to wain in
+between each transaction because it is two different wallets.</p>
+<p>We then wait until slot 20 and perform Wallet 2\&#39;s second <code>grab</code> and
+then wait for 1 block, as usual.</p>
+<p><img src="img/iteration2/pic__00060.png" alt=""></p>
+<p>So let\&#39;s see if it works by clicking <code>Evaluate</code>.</p>
+<p><img src="img/iteration2/pic__00061.png" alt=""></p>
+<p>Take note of the script address for that transaction out at slot 1.</p>
+<p><img src="img/iteration2/pic__00062.png" alt=""></p>
+<p>And compare this with the script address for the transaction output at
+slot 2.</p>
+<p><img src="img/iteration2/pic__00063.png" alt=""></p>
+<p>Notice that the script address for the UTxOs is different. In our first
+version of the vesting contract, the script address was a constant. This
+meant that all our gifts ended up at the same script address and only
+the datum in each UTxO was different.</p>
+<p>Now, the datum is just <code>()</code> and the beneficiary and the deadline are
+included as part of the script itself, so the addresses are now
+different depending on the beneficiary and deadline parameters.</p>
+<p>For the gift to Wallet 3 we see yet another address.</p>
+<p><img src="img/iteration2/pic__00064.png" alt=""></p>
+<p>We see two grabs in slot 10, one by Wallets 2 and one by Wallet 3. The
+order in which they are processed is not deterministic.</p>
+<p>Then, finally in slot 20, Wallet 2 grabs its remaining gift.</p>
+<p>And the final balances reflect the transactions that have occurred.</p>
+<p><img src="img/iteration2/pic__00065.png" alt=""></p>
