@@ -1,17 +1,19 @@
-<<<<<<< HEAD
 Week 04 - Monads
 ================
 
+::: {.note}
+::: {.title}
+Note
+:::
 
 Đây là phiên bản viết của Bài [giảng số
 4](https://youtu.be/HLJOcKlEucI).
 
-Trong bài giảng này, chúng ta tìm hiểu về Đơn nguyên (monads). Đặc biệt là các
+Trong bài giảng này, chúng ta tìm hiểu về Đơn nguyên. Đặc biệt là các
 monads EmulatorTrace và Contract..
 :::
 
-Tổng quat 
----------
+Tổng quat \-\-\-\-\-\-\--
 
 Chúng tôi đã dành hai bài giảng cuối cùng để nói về phần on-chain của
 Plutus - logic xác thực được biên dịch thành tập lệnh Plutus và thực sự
@@ -416,20 +418,30 @@ Hello
 World
 ```
 
-Ở đây, không có kết quả từ `putStrLn` , nhưng nếu có, nó sẽ bị bỏ qua. Các tác dụng không mong muốn của nó sẽ được thực hiện, kết quả của nó bị bỏ qua, sau đó các tác dụng không mong muốn thứ hai của `putStrLn` sẽ được thực hiện trước khi trả về kết quả của lần gọi thứ hai.
+Here, there is no result from `putStrLn`, but if there were, it would
+have been ignored. Its side effects would have been performed, its
+result ignored, then the second `putStrLn` side effects would been
+performed before returning the result of the second call.
 
-Sau đó, có một toán tử quan trọng không bỏ qua kết quả của hành động IO đầu tiên , và đó được gọi là ràng buộc . Nó được viết dưới dạng ký hiệu `\>\>=` .
+Then, there is an important operator that does not ignore the result of
+the first `IO` action, and that is called `bind`. It is written as the
+`\>\>=` symbol.
 
 ``` {.haskell}
 Prelude Week04.Contract> :t (>>=)
 (>>=) :: Monad m => m a -> (a -> m b) -> m b
 ```
 
-Chúng tôi thấy ràng buộc `Monad` , nhưng chúng tôi có thể bỏ qua điều đó ngay bây giờ và chỉ nghĩ về `IO` .
+We see the `Monad` constraint, but we can ignore that for now and just
+think of `IO`.
 
-Điều này nói lên rằng nếu tôi có một công thức thực hiện các tác dụng phụ sau đó cho tôi kết quả `a` , và cho rằng tôi có một hàm nhận `a` và trả lại cho tôi một công thức trả về `b` , thì tôi có thể kết hợp công thức `m a`. với công thức mb bằng cách lấy giá trị a và sử dụng nó trong công thức thu được giá trị `b` .
+What this says is that if I have a recipe that performs side effects
+then gives me a result `a`, and given that I have a function that takes
+an `a` and gives me back a recipe that returns a `b`, then I can combine
+the recipe `m a` with the recipe `m b` by taking the value `a` and using
+it in the recipe that results in the value `b`.
 
-Một ví dụ sẽ làm rõ điều này.
+An example will make this clear.
 
 ``` {.haskell}
 Prelude Week04.Contract> getLine >>= putStrLn
@@ -437,29 +449,38 @@ Haskell
 Haskell
 ```
 
-Ở đây, hàm `getLine`  có kiểu `IO String` . Giá trị trả về `a` được chuyển cho hàm `(a -\> m b)` , sau đó tạo ra một công thức `putStrLn` với giá trị đầu vào là `a` và đầu ra là kiểu `IO ()` . Sau đó, `putStrLn` thực hiện các tác dụng phụ của nó và trả về `Unit` .
+Here, the function `getLine` is of type `IO String`. The return value
+`a` is passed to the function `(a -\> m b)` which then generates a
+recipe `putStrLn` with an input value of `a` and an output of type `IO
+()`. Then, `putStrLn` performs its side effects and returns `Unit`.
 
-Có một cách khác, rất quan trọng, để tạo các hành động `IO` , và đó là tạo các công thức nấu ăn ngay lập tức trả về kết quả mà không thực hiện bất kỳ tác dụng phụ nào.
+There is another, very important, way to create `IO` actions, and that
+is to create recipes that immediately return results without performing
+any side effects.
 
-Điều đó được thực hiện với một chức năng được gọi là `return`.
+That is done with a function called `return`.
 
 ``` {.haskell}
 Prelude Week04.Contract> :t return
 return :: Monad m => a -> m a
 ```
 
-Một lần nữa, nó là chung cho bất kỳ Đơn nguyên (Monad) nào, chúng ta chỉ cần nghĩ về `IO` ngay bây giờ.
+Again, it is general for any Monad, we only need to think about `IO`
+right now.
 
-Nó nhận một giá trị `a` và trả về một công thức tạo ra giá trị `a` . Trong trường hợp trả lại , công thức thực sự không tạo ra bất kỳ tác dụng phụ nào.
+It takes a value `a` and returns a recipe that produces the value `a`.
+In the case of `return`, the recipe does not actually create any side
+effects.
 
-Ví dụ:
+For example:
 
 ``` {.haskell}
 Prelude Week04.Contract> return "Haskell" :: IO String
 "Haskell"
 ```
 
-Chúng tôi cần chỉ định kiểu trả về để REPL biết chúng tôi đang sử dụng `Monad` nào: 
+We needed to specify the return type so that the REPL knows which Monad
+we are using:
 
 ``` {.haskell}
 Prelude Week04.Contract> :t return "Haskell" :: IO String
@@ -469,7 +490,10 @@ Prelude Week04.Contract> :t return "Haskell"
 return "Haskell" :: Monad m => m [Char]
 ```
 
-Nếu bây giờ chúng ta quay lại `main` của mình, bây giờ chúng ta có thể viết các hành động `IO`  tương đối phức tạp . Ví dụ, chúng ta có thể xác định một hành động `IO`  sẽ yêu cầu hai chuỗi và in kết quả của việc nối hai chuỗi đó với bảng điều khiển.
+If we now go back to our `main` program, we can now write relatively
+complex `IO` actions. For example, we can define an `IO` action that
+will ask for two strings and print result of concatenating those two
+strings to the console.
 
 ``` {.haskell}
 main :: IO ()
@@ -481,7 +505,8 @@ bar = getLine >>= \s ->
       putStrLn (s ++ t)
 ```
 
-Và sau đó, khi chúng tôi chạy nó, chương trình sẽ đợi hai đầu vào và sau đó xuất ra kết quả được nối.
+And then, when we run it, the program will wait for two inputs and then
+output the concatenated result.
 
 ``` {.bash}
 cabal run hello
@@ -489,13 +514,18 @@ one
 two
 onetwo
 ```
-Bây giờ điều này là đủ cho các mục đích của chúng tôi, mặc dù chúng tôi sẽ không cần Đơn nguyên `IO` cho đến khi có lẽ sau này trong khóa học khi chúng tôi nói về việc thực sự triển khai các hợp đồng Plutus. Tuy nhiên, `IO` Monad là một ví dụ quan trọng và là một ví dụ tốt để bắt đầu.
 
-Vì vậy, hiện tại, chúng ta hãy hoàn toàn quên `IO` và chỉ viết Haskell thuần túy, có chức năng, sử dụng kiểu `Maybe` .
+This is enough now for our purposes, although we won\'t need the `IO`
+Monad until perhaps later in the course when we talk about actually
+deploying Plutus contracts. However, the `IO` Monad is an important
+example, and a good one to start with.
+
+So, for now, let\'s completely forget about `IO` and just write pure,
+functional Haskell, using the `Maybe` type.
 
 ### Maybe
 
-Kiểu `Maybe`  là một trong những loại hữu ích nhất trong Haskell.
+The `Maybe` type is one of the most useful types in Haskell.
 
 ``` {.haskell}
 Prelude Week04.Contract> :i Maybe
@@ -517,37 +547,36 @@ instance Traversable Maybe -- Defined in ‘Data.Traversable’
 instance MonadFail Maybe -- Defined in ‘Control.Monad.Fail’
 ```
 
-Nó thường được gọi là `Optional` trong các ngôn ngữ lập trình khác.
+It is often called something like `Optional` in other programming
+languages.
 
-Nó có hai hàm tạo - `Nothing` , không nhận đối số và `Just` - có một đối số.
+It has two constructors - `Nothing`, which takes no arguments, and
+`Just`, which takes one argument.
 
 ``` {.haskell}
 data Maybe a = Nothing | Just a
 ```
 
-Hãy xem một ví dụ.
+Let\'s look at an example.
 
-Trong Haskell, nếu bạn muốn truyền `String` đến một giá trị có thể hiện `read` , bạn sẽ thường làm điều này với hàm `read` .
-
+In Haskell, if you want to pass a `String` to a value that has a `read`
+instance, you will normally do this with the `read` function.
 
 ``` {.haskell}
 Week04.Maybe> read "42" :: Int
 42
 ```
 
-Tuy nhiên, `read` hơi khó chịu, bởi vì nếu chúng ta có thứ gì đó không thể phân tích cú pháp thành `Int` , thì chúng ta sẽ gặp lỗi.
+But, `read` is a bit unpleasant, because if we have something that
+can\'t be parsed as an `Int`, then we get an error.
 
 ``` {.haskell}
 Week04.Maybe> read "42+u" :: Int
-@$# Exception: Prelude.read: no parse
+``` Exception: Prelude.read: no parse
 ```
 
-Hãy import `readMaybe` để làm điều đó theo cách tốt hơn.
+Let\'s import `readMaybe` to do it in a better way.
 
-=======
-
-
->>>>>>> b31d91a67e0e829a40ea4af52c49a983896ae305
 ``` {.haskell}
 Prelude Week04.Maybe> import Text.Read (readMaybe)
 Prelude Text.Read Week04.Contract>
@@ -1508,9 +1537,9 @@ def = TraceConfig
 
 defaultShowEvent :: EmulatorEvent' -> Maybe String
 defaultShowEvent = \case
-UserThreadEvent (UserLog msg)                                        -> Just $ "@$# USER LOG: " <> msg
-InstanceEvent (ContractInstanceLog (ContractLog (A.String msg)) _ _) -> Just $ "@$# CONTRACT LOG: " <> show msg
-InstanceEvent (ContractInstanceLog (StoppedWithError err)       _ _) -> Just $ "@$# CONTRACT STOPPED WITH ERROR: " <> show err
+UserThreadEvent (UserLog msg)                                        -> Just $ "``` USER LOG: " <> msg
+InstanceEvent (ContractInstanceLog (ContractLog (A.String msg)) _ _) -> Just $ "``` CONTRACT LOG: " <> show msg
+InstanceEvent (ContractInstanceLog (StoppedWithError err)       _ _) -> Just $ "``` CONTRACT STOPPED WITH ERROR: " <> show err
 InstanceEvent (ContractInstanceLog NoRequestsHandled            _ _) -> Nothing
 InstanceEvent (ContractInstanceLog (HandledRequest _)           _ _) -> Nothing
 InstanceEvent (ContractInstanceLog (CurrentRequests _)          _ _) -> Nothing
@@ -1582,7 +1611,7 @@ Slot 00001: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1
 Slot 00001: W1: TxSubmit: 49f326a21c09ba52eddee46b65bdb5fb33b3444745e9af1510a68f9043696eba
 Slot 00001: TxnValidate 49f326a21c09ba52eddee46b65bdb5fb33b3444745e9af1510a68f9043696eba
 Slot 00001: SlotAdd Slot 2
-Slot 00002: @$# CONTRACT LOG: "made a gift of 1000 lovelace to 39f713d0a644253f04529421b9f51b9b08979d08295959c4f3990ee617f5139f with deadline Slot {getSlot = 20}"
+Slot 00002: ``` CONTRACT LOG: "made a gift of 1000 lovelace to 39f713d0a644253f04529421b9f51b9b08979d08295959c4f3990ee617f5139f with deadline Slot {getSlot = 20}"
 Slot 00002: SlotAdd Slot 3
 Slot 00003: SlotAdd Slot 4
 Slot 00004: SlotAdd Slot 5
@@ -1606,7 +1635,7 @@ Slot 00020: 00000000-0000-4000-8000-000000000001 {Contract instance for wallet 2
 Slot 00020: W2: TxSubmit: d9a2028384b4472242371f27cb51727f5c7c04327972e4278d1f69f606019a8b
 Slot 00020: TxnValidate d9a2028384b4472242371f27cb51727f5c7c04327972e4278d1f69f606019a8b
 Slot 00020: SlotAdd Slot 21
-Slot 00021: @$# CONTRACT LOG: "collected gifts"
+Slot 00021: ``` CONTRACT LOG: "collected gifts"
 Slot 00021: SlotAdd Slot 22
 Final balances
 Wallet 1: 
@@ -1653,8 +1682,8 @@ We would then see this output when we run the emulation:
 ``` {.}
 ...
 Slot 00020: SlotAdd Slot 21
-Slot 00021: @$# USER LOG: reached slot Slot {getSlot = 21}
-Slot 00021: @$# CONTRACT LOG: "collected gifts"
+Slot 00021: ``` USER LOG: reached slot Slot {getSlot = 21}
+Slot 00021: ``` CONTRACT LOG: "collected gifts"
 Slot 00021: SlotAdd Slot 22
 ...
 ```
@@ -1725,7 +1754,7 @@ Slot 00000: TxnValidate af5e6d25b5ecb26185289a03d50786b7ac4425b21849143ed7e18bcd
 Slot 00000: SlotAdd Slot 1
 Slot 00001: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1}:
 Contract instance started
-Slot 00001: @$# CONTRACT LOG: \"Hello from the contract!\"
+Slot 00001: ``` CONTRACT LOG: \"Hello from the contract!\"
 Slot 00001: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1}:
 Contract instance stopped (no errors)
 Slot 00001: SlotAdd Slot 2
@@ -1769,7 +1798,7 @@ Slot 00000: TxnValidate af5e6d25b5ecb26185289a03d50786b7ac4425b21849143ed7e18bcd
 Slot 00000: SlotAdd Slot 1
 Slot 00001: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1}:
 Contract instance started
-Slot 00001: @$# CONTRACT STOPPED WITH ERROR: "\"BOOM!\""
+Slot 00001: ``` CONTRACT STOPPED WITH ERROR: "\"BOOM!\""
 Slot 00001: SlotAdd Slot 2
 Final balances
 Wallet 1: 
@@ -1849,7 +1878,7 @@ Slot 00000: TxnValidate af5e6d25b5ecb26185289a03d50786b7ac4425b21849143ed7e18bcd
 Slot 00000: SlotAdd Slot 1
 Slot 00001: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1}:
 Contract instance started
-Slot 00001: @$# CONTRACT LOG: "Caught error: BOOM!"
+Slot 00001: ``` CONTRACT LOG: "Caught error: BOOM!"
 Slot 00001: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1}:
 Contract instance stopped (no errors)
 Slot 00001: SlotAdd Slot 2
@@ -2045,21 +2074,21 @@ Slot 00005: SlotAdd Slot 6
 Slot 00006: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1}:
   Sending contract state to Thread 0
 Slot 00006: SlotAdd Slot 7
-Slot 00007: @$# USER LOG: []
+Slot 00007: ``` USER LOG: []
 Slot 00007: SlotAdd Slot 8
 ...
 Slot 00015: SlotAdd Slot 16
 Slot 00016: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1}:
   Sending contract state to Thread 0
 Slot 00016: SlotAdd Slot 17
-Slot 00017: @$# USER LOG: [1]
+Slot 00017: ``` USER LOG: [1]
 Slot 00017: SlotAdd Slot 18
 ...
 Slot 00025: SlotAdd Slot 26
 Slot 00026: 00000000-0000-4000-8000-000000000000 {Contract instance for wallet 1}:
   Sending contract state to Thread 0
 Slot 00026: SlotAdd Slot 27
-Slot 00027: @$# USER LOG: [1,2]
+Slot 00027: ``` USER LOG: [1,2]
 Final balances
 Wallet 1: 
     {, ""}: 100000000
