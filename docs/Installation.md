@@ -1,4 +1,4 @@
-Cài đặt playground tại máy local
+playground local
 ========================
 
 Build Plutus dev environment on Ubuntu 20.04 VM
